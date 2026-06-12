@@ -27,17 +27,14 @@ const Router = () => ([
               <Route path="/profile/:userId" element={<ProfilePage />} />
 
               {/* ─── PROTECTED PRIVATE ROUTES ─── */}
-              {/* <Route element={<ProtectedRoute />}>
+              <Route element={<ProtectedRoute />}>
                 <Route path="/library" element={<LibraryPage />} />
-              </Route> */}
-                <Route path="/library" element={<LibraryPage />} />
+              </Route>
 
               {/* ─── PROTECTED ARTIST ONLY ROUTES ─── */}
-              {/* <Route element={<ProtectedRoute allowedRoles={["ARTIST", "ADMIN"]} />}>
+              <Route element={<ProtectedRoute allowedRoles={["ARTIST", "ADMIN"]} />}>
                 <Route path="/upload" element={<UploadPage />} />
-              </Route> */}
-                <Route path="/upload" element={<UploadPage />} />
-
+              </Route>
             </Route>
 
             <Route path="*" element={<Navigate to="/" replace />} />

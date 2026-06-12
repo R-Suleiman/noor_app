@@ -2,12 +2,15 @@ import { useState, useEffect, useCallback } from "react";
 import TrackRow from "../components/TrackRow";
 import Avatar from "../components/Avatar";
 import { axiosClient } from "../lib/api";
+import { useNavigate } from "react-router-dom";
 
-export default function SearchPage({ navigate }) {
+export default function SearchPage() {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState({ tracks: [], artists: [], albums: [] });
   const [activeTab, setActiveTab] = useState("all"); // all | tracks | artists | albums
   const [loading, setLoading] = useState(false);
+  const API_BASE_URL = "http://localhost:3001";
+  const navigate = useNavigate()
 
   // Trigger search requests using an optimized fetch routine
   const executeSearch = useCallback((searchStr) => {
@@ -20,9 +23,9 @@ export default function SearchPage({ navigate }) {
     axiosClient.get(`/search?q=${encodeURIComponent(searchStr)}`)
       .then((res) => {
         setResults({
-          tracks: res.data.tracks || [],
-          artists: res.data.artists || [],
-          albums: res.data.albums || []
+          tracks: res.tracks || [],
+          artists: res.artists || [],
+          albums: res.albums || []
         });
       })
       .catch((err) => {
@@ -142,10 +145,10 @@ export default function SearchPage({ navigate }) {
                 {results.artists.map((artist) => (
                   <div
                     key={artist.id}
-                    onClick={() => navigate("artist", { artistId: artist.id })}
+                    onClick={() => navigate(`/artist/${artist.id}`)}
                     className="bg-zinc-900/40 hover:bg-zinc-800/40 border border-white/5 rounded-2xl p-4 flex flex-col items-center text-center cursor-pointer transition-all duration-150"
                   >
-                    <Avatar name={artist.name} size="lg" className="mb-3 shadow-md" />
+                    <Avatar name={artist.name} url={`${API_BASE_URL}${artist.user.avatarUrl}`} size="lg" className="mb-3 shadow-md" />
                     <p className="text-sm font-bold text-zinc-100 truncate w-full">{artist.name}</p>
                     <p className="text-xs text-zinc-500 mt-1">
                       {artist._count?.tracks ?? 0} tracks · {artist.user?._count?.followers ?? 0} followers
@@ -164,7 +167,7 @@ export default function SearchPage({ navigate }) {
                 {results.albums.map((album) => (
                   <div
                     key={album.id}
-                    onClick={() => navigate("album", { albumId: album.id })}
+                    onClick={() => navigate(`album/${album.id}`)}
                     className="flex items-center gap-4 bg-zinc-900/30 hover:bg-zinc-800/40 border border-white/5 p-3 rounded-xl cursor-pointer transition-all group"
                   >
                     <div className="w-12 h-12 bg-zinc-800 rounded-lg flex-shrink-0 flex items-center justify-center overflow-hidden shadow border border-white/5">

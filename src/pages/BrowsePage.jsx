@@ -36,7 +36,7 @@ export default function BrowsePage() {
     axiosClient.get(`/tracks?${params.toString()}`)
       .then((res) => {
         if (isMounted) {
-          setTracks(res.data.tracks || []);
+          setTracks(res.tracks || []);
         }
       })
       .catch((err) => {

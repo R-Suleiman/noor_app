@@ -1,6 +1,13 @@
-import { createContext, useContext, useEffect, useRef, useState, useCallback } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  useCallback,
+} from "react";
 import { Howl } from "howler";
-import { axiosClient, API } from "../lib/api"; 
+import { axiosClient, API } from "../lib/api";
 
 const PlayerCtx = createContext(null);
 export const usePlayer = () => useContext(PlayerCtx);
@@ -8,16 +15,16 @@ export const usePlayer = () => useContext(PlayerCtx);
 export function PlayerProvider({ children }) {
   const howlRef = useRef(null);
   const seekRafRef = useRef(null);
-  
+
   // Keeps track of the active track object in a mutable reference to avoid re-binding callbacks
   const currentTrackRef = useRef(null);
 
   const [current, setCurrent] = useState(null);
   const [queue, setQueue] = useState([]);
   const [status, setStatus] = useState("idle"); // idle | loading | playing | paused | error
-  const [progress, setProgress] = useState(0);  // 0–100
-  const [elapsed, setElapsed] = useState(0);    // seconds
-  const [duration, setDuration] = useState(0);  // seconds
+  const [progress, setProgress] = useState(0); // 0–100
+  const [elapsed, setElapsed] = useState(0); // seconds
+  const [duration, setDuration] = useState(0); // seconds
   const [volume, setVolState] = useState(0.75);
 
   // Synchronize the component state to our reference hook
@@ -55,85 +62,111 @@ export function PlayerProvider({ children }) {
   }, [stopSeekLoop]);
 
   // ── core player control execution routine ──────────────────────────────────
-  const play = useCallback((track, newQueue = []) => {
-    // If the same track is requested while loaded, simply toggle its state
-    if (howlRef.current && currentTrackRef.current?.id === track.id) {
-      if (howlRef.current.state() === "loaded") {
-        howlRef.current.play();
+  const play = useCallback(
+    (track, newQueue = []) => {
+      // If the same track is requested while loaded, simply toggle its state
+      if (howlRef.current && currentTrackRef.current?.id === track.id) {
+        if (howlRef.current.state() === "loaded") {
+          howlRef.current.play();
+        }
+        return;
       }
-      return;
-    }
 
-    destroyCurrent();
-    setCurrent(track);
-    setStatus("loading");
-    setProgress(0);
-    setElapsed(0);
-    setDuration(0);
-    if (newQueue.length > 0) setQueue(newQueue);
+      destroyCurrent();
+      setCurrent(track);
+      setStatus("loading");
+      setProgress(0);
+      setElapsed(0);
+      setDuration(0);
+      if (newQueue.length > 0) setQueue(newQueue);
 
-    // Stream directly from our range-request optimized Fastify endpoint
-    const src = `${API}/tracks/${track.id}/stream`;
+      // Stream directly from our range-request optimized Fastify endpoint
+      const src = `${API}/tracks/${track.id}/stream`;
 
-    const h = new Howl({
-      src: [src],
-      html5: true, // Stream chunks natively without pre-buffering the complete audio file
-      volume: volume,
-      format: ["mp3", "wav", "flac", "m4a"],
+      const h = new Howl({
+        src: [src],
+        html5: true, // Stream chunks natively without pre-buffering the complete audio file
+        volume: volume,
+        format: ["mp3", "wav", "flac", "m4a"],
+        xhr: {
+          withCredentials: false,
+        },
 
-      onload: () => {
-        setDuration(h.duration());
-        setStatus("playing");
-        startSeekLoop();
-        
-        axiosClient.post(`/tracks/${track.id}/play`, { durationMs: h.duration() * 1000 })
-          .catch(() => {});
-      },
+        onload: () => {
+          setDuration(h.duration());
+          setStatus("playing");
+          startSeekLoop();
 
-      onloaderror: (_id, err) => {
-        console.error(`[Howler Stream Error] failed path: "${track.title}" (${src}) — code:`, err);
-        setStatus("error");
-      },
+          axiosClient
+            .post(`/tracks/${track.id}/play`, {
+              durationMs: h.duration() * 1000,
+            })
+            .catch(() => {});
+        },
 
-      onplayerror: (_id, err) => {
-        console.error("[Howler Playback Interruption] interaction required:", err);
-        h.once("unlock", () => h.play());
-      },
+        onloaderror: (_id, err) => {
+          console.error(
+            `[Howler Stream Error] failed path: "${track.title}" (${src}) — code:`,
+            err,
+          );
+          setStatus("error");
+        },
 
-      onplay: () => { setStatus("playing"); startSeekLoop(); },
-      onpause: () => { setStatus("paused"); stopSeekLoop(); },
-      onstop: () => { setStatus("paused"); stopSeekLoop(); setProgress(0); setElapsed(0); },
+        onplayerror: (_id, err) => {
+          console.error(
+            "[Howler Playback Interruption] interaction required:",
+            err,
+          );
+          h.once("unlock", () => h.play());
+        },
 
-      onend: () => {
-        stopSeekLoop();
-        setProgress(100);
-        // Step into the next track in the queue safely using accurate state updates
-        setQueue(currentQueue => {
-          const idx = currentQueue.findIndex(t => t.id === track.id);
-          const next = currentQueue[idx + 1];
-          if (next) {
-            setTimeout(() => play(next, currentQueue), 300);
-          } else {
-            setStatus("paused");
-          }
-          return currentQueue;
-        });
-      },
+        onplay: () => {
+          setStatus("playing");
+          startSeekLoop();
+        },
+        onpause: () => {
+          setStatus("paused");
+          stopSeekLoop();
+        },
+        onstop: () => {
+          setStatus("paused");
+          stopSeekLoop();
+          setProgress(0);
+          setElapsed(0);
+        },
 
-      onseek: () => {
-        const pos = typeof h.seek() === "number" ? h.seek() : 0;
-        setElapsed(pos);
-        setProgress(h.duration() > 0 ? (pos / h.duration()) * 100 : 0);
-      },
-    });
+        onend: () => {
+          stopSeekLoop();
+          setProgress(100);
+          // Step into the next track in the queue safely using accurate state updates
+          setQueue((currentQueue) => {
+            const idx = currentQueue.findIndex((t) => t.id === track.id);
+            const next = currentQueue[idx + 1];
+            if (next) {
+              setTimeout(() => play(next, currentQueue), 300);
+            } else {
+              setStatus("paused");
+            }
+            return currentQueue;
+          });
+        },
 
-    howlRef.current = h;
-    h.play();
-  }, [destroyCurrent, startSeekLoop, stopSeekLoop, volume]);
+        onseek: () => {
+          const pos = typeof h.seek() === "number" ? h.seek() : 0;
+          setElapsed(pos);
+          setProgress(h.duration() > 0 ? (pos / h.duration()) * 100 : 0);
+        },
+      });
+
+      howlRef.current = h;
+      h.play();
+    },
+    [destroyCurrent, startSeekLoop, stopSeekLoop, volume],
+  );
 
   const pause = useCallback(() => howlRef.current?.pause(), []);
   const resume = useCallback(() => howlRef.current?.play(), []);
-  
+
   const togglePlay = useCallback(() => {
     if (!howlRef.current || !currentTrackRef.current) return;
     howlRef.current.playing() ? pause() : resume();
@@ -157,19 +190,23 @@ export function PlayerProvider({ children }) {
   const playNext = useCallback(() => {
     const activeTrack = currentTrackRef.current;
     if (!queue.length || !activeTrack) return;
-    const next = queue[queue.findIndex(t => t.id === activeTrack.id) + 1];
+    const next = queue[queue.findIndex((t) => t.id === activeTrack.id) + 1];
     if (next) play(next, queue);
   }, [queue, play]);
 
   const playPrev = useCallback(() => {
     // If we are deep into a track (>3 seconds), restart it instead of changing songs
-    if (howlRef.current && typeof howlRef.current.seek() === "number" && howlRef.current.seek() > 3) {
+    if (
+      howlRef.current &&
+      typeof howlRef.current.seek() === "number" &&
+      howlRef.current.seek() > 3
+    ) {
       seek(0);
       return;
     }
     const activeTrack = currentTrackRef.current;
     if (!activeTrack) return;
-    const prev = queue[queue.findIndex(t => t.id === activeTrack.id) - 1];
+    const prev = queue[queue.findIndex((t) => t.id === activeTrack.id) - 1];
     if (prev) play(prev, queue);
   }, [queue, play, seek]);
 
@@ -182,14 +219,27 @@ export function PlayerProvider({ children }) {
   useEffect(() => () => destroyCurrent(), [destroyCurrent]);
 
   return (
-    <PlayerCtx.Provider value={{
-      current, queue, status,
-      playing: status === "playing",
-      buffering: status === "loading",
-      progress, elapsed, duration, volume,
-      play, pause, resume, togglePlay,
-      seek, setVolume, playNext, playPrev,
-    }}>
+    <PlayerCtx.Provider
+      value={{
+        current,
+        queue,
+        status,
+        playing: status === "playing",
+        buffering: status === "loading",
+        progress,
+        elapsed,
+        duration,
+        volume,
+        play,
+        pause,
+        resume,
+        togglePlay,
+        seek,
+        setVolume,
+        playNext,
+        playPrev,
+      }}
+    >
       {children}
     </PlayerCtx.Provider>
   );

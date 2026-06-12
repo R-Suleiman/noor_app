@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import { axiosClient } from "../lib/api";
 
@@ -12,7 +12,7 @@ export default function UploadPage() {
     titleSw: "",
     genre: "QASIDAS",
     language: "ARABIC",
-    albumId: "" // Added explicit mapping placeholder for relational safety
+    albumId: "" // Clean relational reference assignment mapping
   });
   
   const [audioFile, setAudioFile] = useState(null);
@@ -22,13 +22,30 @@ export default function UploadPage() {
 
   // System State Flags
   const [busy, setBusy] = useState(false);
-  const [progress, setProgress] = useState(0); // Track progress as an absolute percentage
+  const [progress, setProgress] = useState(0); 
   const [done, setDone] = useState(false);
   const [error, setError] = useState("");
+  
+  // Added dynamic list of existing artist studio folders
+  const [albumsList, setAlbumsList] = useState([]);
+  const [loadingAlbums, setLoadingAlbums] = useState(false);
 
   const coverInputRef = useRef(null);
 
   const set = (k, v) => setF((x) => ({ ...x, [k]: v }));
+
+  // Load Album List Contexts dynamically
+  useEffect(() => {
+    if (user?.id && user?.role === "ARTIST") {
+      setLoadingAlbums(true);
+      axiosClient.get(`/artists/${user.id}/albums`)
+        .then((res) => {
+          setAlbumsList(res.data?.albums || res.albums || []);
+        })
+        .catch((err) => console.error("Error retrieving organizational folders:", err))
+        .finally(() => setLoadingAlbums(false));
+    }
+  }, [user]);
 
   // Guard Clause Authentication Filter
   if (!user || user.role !== "ARTIST") {
@@ -47,7 +64,6 @@ export default function UploadPage() {
     );
   }
 
-  // Intercept inbound audio selections to pull playhead runtime parameters safely
   const handleAudioSelection = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -55,7 +71,6 @@ export default function UploadPage() {
     setAudioFile(file);
     setError("");
 
-    // Dynamic extraction of track metrics using browser audio contexts
     const audioContext = new Audio();
     audioContext.src = URL.createObjectURL(file);
     audioContext.onloadedmetadata = () => {
@@ -63,7 +78,6 @@ export default function UploadPage() {
     };
   };
 
-  // Process cover image placement previews cleanly
   const handleCoverSelection = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -86,23 +100,19 @@ export default function UploadPage() {
       if (coverFile) fd.append("cover", coverFile);
       fd.append("duration", calculatedDuration.toString());
 
-      // Iterate and bind cleanly verified form elements
       Object.entries(f).forEach(([k, v]) => {
-        if (v && v.trim() !== "") fd.append(k, v);
+        if (v && String(v).trim() !== "") fd.append(k, v);
       });
 
-      // Execute request with progress feedback loops via Axios Client context
       const res = await axiosClient.post("/upload/track", fd, {
         headers: { "Content-Type": "multipart/form-data" },
         onUploadProgress: (progressEvent) => {
-          const percentCompleted = Math.round(
-            (progressEvent.loaded * 100) / progressEvent.total
-          );
+          const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
           setProgress(percentCompleted);
         }
       });
 
-      if (res.status === 201) {
+      if (res.status === 201 || res.status === 200) {
         setDone(true);
       }
     } catch (e) {
@@ -122,7 +132,6 @@ export default function UploadPage() {
     setF({ title: "", titleAr: "", titleSw: "", genre: "QASIDAS", language: "ARABIC", albumId: "" });
   };
 
-  // Success Lifecycle Display Component
   if (done) {
     return (
       <div className="p-8 flex flex-col items-center justify-center py-32 text-center max-w-sm mx-auto">
@@ -147,8 +156,6 @@ export default function UploadPage() {
 
   return (
     <div className="p-8 max-w-4xl mx-auto min-h-screen">
-      
-      {/* Page Header Header Meta Description */}
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-zinc-100 tracking-tight" style={{ fontFamily: "'Cinzel', serif" }}>
           Publish Media Creator
@@ -159,11 +166,7 @@ export default function UploadPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-        
-        {/* Left Hand Column Panel Area — Assets Selectors */}
         <div className="md:col-span-1 space-y-6">
-          
-          {/* 1. Cover Artwork File Component Grid Selector */}
           <div>
             <label className="text-xs tracking-widest uppercase font-bold text-zinc-500 block mb-2">
               Collection Art
@@ -196,7 +199,6 @@ export default function UploadPage() {
             </div>
           </div>
 
-          {/* 2. Secondary Display Window For Extracted Core File Metrics */}
           {audioFile && (
             <div className="bg-zinc-900/50 border border-white/5 rounded-xl p-4 text-xs font-medium text-zinc-400 space-y-2">
               <div className="text-zinc-500 uppercase tracking-wider font-bold text-[10px] border-b border-zinc-800 pb-1.5 mb-2">File Inspector Output</div>
@@ -205,13 +207,9 @@ export default function UploadPage() {
               <p><span className="text-zinc-600 font-mono">Length:</span> {Math.floor(calculatedDuration / 60)}m {calculatedDuration % 60}s</p>
             </div>
           )}
-
         </div>
 
-        {/* Right Hand Column Panel Area — Text Field Config Inputs */}
         <div className="md:col-span-2 space-y-6">
-          
-          {/* Main Drag Drop Target Audio Field Slot Wrapper Block */}
           <label className={`group block border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-all ${
             audioFile ? "border-emerald-500/30 bg-emerald-500/5" : "border-white/5 hover:border-emerald-500/40 hover:bg-emerald-500/5"
           }`}>
@@ -238,7 +236,6 @@ export default function UploadPage() {
             )}
           </label>
 
-          {/* Core Text Form Payload Control Matrix Fields */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {[
               ["Global track title", "title", "sm:col-span-2", "e.g., Qamarun Sidnan Nabi"],
@@ -257,7 +254,24 @@ export default function UploadPage() {
               </div>
             ))}
 
-            {/* Categorization Selection Form Units */}
+            {/* NEW ADDITION: Dynamic Relational Album Linking Select Unit */}
+            <div className="flex flex-col gap-1.5 sm:col-span-2">
+              <label className="text-[11px] tracking-wider uppercase font-bold text-zinc-500">
+                Link to Studio Album / Collection (Optional)
+              </label>
+              <select
+                value={f.albumId}
+                onChange={(e) => set("albumId", e.target.value)}
+                disabled={busy || loadingAlbums}
+                className="bg-zinc-900/60 border border-white/5 focus:border-emerald-500/60 text-sm text-zinc-100 px-4 py-3 rounded-xl outline-none cursor-pointer w-full font-medium"
+              >
+                <option value="">-- Independent Release (No Album Assignment) --</option>
+                {albumsList.map((a) => (
+                  <option key={a.id} value={a.id}>{a.title} ({a.releaseYear})</option>
+                ))}
+              </select>
+            </div>
+
             <div className="flex flex-col gap-1.5">
               <label className="text-[11px] tracking-wider uppercase font-bold text-zinc-500">Genre Map</label>
               <select
@@ -287,7 +301,6 @@ export default function UploadPage() {
             </div>
           </div>
 
-          {/* Dynamic real-time upload track state monitoring block */}
           {busy && (
             <div className="w-full bg-zinc-900/80 border border-white/5 rounded-2xl p-4 animate-[fadeIn_0.2s_ease-out]">
               <div className="flex justify-between text-xs font-bold text-zinc-400 mb-2">
@@ -298,22 +311,17 @@ export default function UploadPage() {
                 <span className="font-mono text-emerald-400">{progress}%</span>
               </div>
               <div className="w-full bg-zinc-800 rounded-full h-1.5 overflow-hidden">
-                <div 
-                  className="bg-emerald-500 h-1.5 rounded-full transition-all duration-150 ease-out" 
-                  style={{ width: `${progress}%` }}
-                />
+                <div className="bg-emerald-500 h-1.5 rounded-full transition-all duration-150 ease-out" style={{ width: `${progress}%` }} />
               </div>
             </div>
           )}
 
-          {/* Interface Feedback Reporting System Alerts */}
           {error && (
             <div className="text-xs font-bold text-red-400 bg-red-500/10 border border-red-500/10 rounded-xl px-4 py-3 flex items-center gap-2">
               <i className="ti ti-alert-circle text-base" /> {error}
             </div>
           )}
 
-          {/* Footer Interactive Actions Toolbars */}
           <div className="flex items-center gap-3 pt-2">
             <button
               onClick={submit}
@@ -323,7 +331,6 @@ export default function UploadPage() {
               <i className="ti ti-upload-cloud text-base" /> Commit & Publish Track
             </button>
           </div>
-
         </div>
       </div>
     </div>
