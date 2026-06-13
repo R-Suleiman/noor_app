@@ -25,6 +25,7 @@ export default function ProfilePage({ userId }) {
 
   // Upload & Library Sub-Management States
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [uploadingCover, setUploadingCover] = useState(false);
   const [albums, setAlbums] = useState([]);
   const [loadingLibrary, setLoadingLibrary] = useState(false);
   const [managingAlbumId, setManagingAlbumId] = useState(null);
@@ -39,6 +40,7 @@ export default function ProfilePage({ userId }) {
 
   // HTML Native File Input Referencing Handler
   const avatarInputRef = useRef(null);
+  const coverInputRef = useRef(null);
 
   const uid = userId ?? authUser?.id;
   const isOwn = authUser?.id && uid && String(authUser.id) === String(uid);
@@ -100,30 +102,38 @@ export default function ProfilePage({ userId }) {
   }, [isArtist, isOwn, uid]);
 
   // AVATAR MULTIPART UPLOAD CONTROL DISPATCHER
-  const handleAvatarUpload = async (e) => {
+  const handleMediaUpload = async (e, type) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     const formData = new FormData();
+    formData.append("type", type); // "avatar" or "cover"
     formData.append("file", file);
-    formData.append("type", "avatar");
 
-    setUploadingAvatar(true);
+    if (type === "avatar") setUploadingAvatar(true);
+    if (type === "cover") setUploadingCover(true);
     setError("");
 
     try {
-      const res = await axiosClient.patch(`/artists/profile/media`, formData, {
+      const res = await axiosClient.post(`/artists/profile/media`, formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
 
-      const updatedUser = res.data?.user || res.user || res.data;
-      setProfile((prev) => ({ ...prev, ...updatedUser }));
+      const data = res.data || res;
+
+      if (type === "avatar") {
+        setProfile((prev) => ({ ...prev, avatarUrl: data.avatarUrl }));
+      } else if (type === "cover") {
+        setArtist((prev) => ({ ...prev, coverUrl: data.coverUrl }));
+      }
     } catch (err) {
       setError(
-        err.response?.data?.error || "Failed to upload your chosen avatar.",
+        err.response?.data?.error ||
+          `Failed to modify your profile ${type} asset.`,
       );
     } finally {
       setUploadingAvatar(false);
+      setUploadingCover(false);
     }
   };
 
@@ -257,16 +267,51 @@ export default function ProfilePage({ userId }) {
 
   return (
     <div className="max-w-7xl mx-auto min-h-screen pb-24 bg-zinc-950 text-zinc-100">
+      {/* Hidden Binary Multi-part File Inputs */}
       <input
         type="file"
         ref={avatarInputRef}
         accept="image/*"
         className="hidden"
-        onChange={handleAvatarUpload}
+        onChange={(e) => handleMediaUpload(e, "avatar")}
+      />
+      <input
+        type="file"
+        ref={coverInputRef}
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => handleMediaUpload(e, "cover")}
       />
 
-      {/* Visual Decorative Spacing Banner */}
-      <div className="h-40 sm:h-40 w-full bg-gradient-to-r from-zinc-900 to-zinc-900/50 rounded-b-2xl border-b border-white/5" />
+      {/* UPGRADED VISUAL COVER BANNER LAYER */}
+      <div
+        className="h-44 sm:h-52 w-full bg-cover bg-center bg-no-repeat relative rounded-b-2xl border-b border-white/5 overflow-hidden group/cover"
+        style={{
+          backgroundImage: artist?.coverUrl
+            ? `linear-gradient(to bottom, rgba(9, 9, 11, 0.2), rgba(9, 9, 11, 0.8)), url(${API_BASE_URL}${artist.coverUrl})`
+            : `linear-gradient(to right, #18181b, rgba(24, 24, 27, 0.5))`,
+        }}
+      >
+        {isOwn && isArtist && (
+          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/cover:opacity-100 transition-opacity flex items-center justify-center">
+            <button
+              type="button"
+              onClick={() => coverInputRef.current?.click()}
+              disabled={uploadingCover}
+              className="bg-zinc-900/90 hover:bg-zinc-800 text-white text-xs font-bold uppercase tracking-wider px-4 py-2 rounded-xl border border-white/10 shadow-lg cursor-pointer flex items-center gap-2 transition-transform active:scale-95"
+            >
+              {uploadingCover ? (
+                <Spinner />
+              ) : (
+                <>
+                  <i className="ti ti-camera text-sm" />
+                  <span>Update Banner Background</span>
+                </>
+              )}
+            </button>
+          </div>
+        )}
+      </div>
 
       {/* PROFILE META OVERLAY CONTEXT GRID */}
       <div className="px-8 pt-0">
@@ -579,10 +624,9 @@ export default function ProfilePage({ userId }) {
                 </>
               )}
 
-              {/* BRAND NEW: LIBRARY MANAGEMENT PANEL FOR CORE ARTISTS */}
+              {/* LIBRARY MANAGEMENT PANEL FOR CORE ARTISTS */}
               {activeTab === "manage_library" && isArtist && isOwn && (
                 <div className="space-y-6 pt-1">
-                  {/* Studio Quick Actions Info Header */}
                   <div className="bg-zinc-900/30 border border-white/5 rounded-xl p-4 flex flex-col sm:flex-row gap-4 items-center justify-between">
                     <div>
                       <h4 className="text-sm font-bold text-white">
@@ -693,7 +737,6 @@ export default function ProfilePage({ userId }) {
                           ))}
                         </div>
 
-                        {/* ─── ADD THIS MODAL WIREUP RENDER LAYER ───────────────────────── */}
                         {managingAlbumId && (
                           <AlbumManagementModal
                             albumId={managingAlbumId}

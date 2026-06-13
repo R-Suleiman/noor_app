@@ -38,7 +38,7 @@ export default function ArtistPage() {
 
         setArtist(fetchedArtist);
         setTracks(fetchedTracks);
-
+        
         if (fetchedArtist) {
           setFollowing(fetchedArtist.isFollowing || false);
         }
@@ -57,7 +57,7 @@ export default function ArtistPage() {
     const next = !following;
     setFollowing(next);
     try {
-      await axiosClient.post(`/users/${artist?.userId || artist?.id}/follow`);
+      await axiosClient.post(`/users/${artistId}/follow`);
       setArtist((prev) => ({
         ...prev,
         _count: {
@@ -88,7 +88,7 @@ export default function ArtistPage() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto px-4 pb-12">
+    <div className="max-w-7xl mx-auto px-4 pb-12">
       {/* ─── HERO BANNER COVER BLOCK ──────────────────────────────── */}
       <div
         className={`relative h-80 ${trackBg(tracks[0])} flex items-end rounded-2xl overflow-hidden shadow-xl border border-white/5`}

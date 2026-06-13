@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import { axiosClient } from "../lib/api";
+import { useNavigate } from "react-router-dom";
 
 export default function UploadPage() {
   const { user } = useAuth();
@@ -31,6 +32,7 @@ export default function UploadPage() {
   const [loadingAlbums, setLoadingAlbums] = useState(false);
 
   const coverInputRef = useRef(null);
+  const navigation = useNavigate()
 
   const set = (k, v) => setF((x) => ({ ...x, [k]: v }));
 
@@ -112,9 +114,12 @@ export default function UploadPage() {
         }
       });
 
-      if (res.status === 201 || res.status === 200) {
+      console.log('upload response:', res)
+
+      if (res.track || res.status === 201 || res.status === 200) {
         setDone(true);
       }
+      
     } catch (e) {
       setError(e.response?.data?.error || e.message || "An unexpected asset storage write error occurred.");
     } finally {
@@ -306,7 +311,7 @@ export default function UploadPage() {
               <div className="flex justify-between text-xs font-bold text-zinc-400 mb-2">
                 <span className="inline-flex items-center gap-2">
                   <div className="w-2.5 h-2.5 border-2 border-emerald-500/20 border-t-emerald-400 rounded-full animate-spin" />
-                  Streaming files to node servers...
+                  Uploading file...
                 </span>
                 <span className="font-mono text-emerald-400">{progress}%</span>
               </div>
