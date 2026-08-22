@@ -1,24 +1,29 @@
-import { useState, useEffect } from "react";
-import { axiosClient } from "../lib/api";
+import { useState, useEffect, useRef } from "react";
+import { axiosClient, mediaUrl } from "../lib/api";
 import Spinner from "./Spinner";
+import { useDialog } from "../context/DialogContext";
 
 export default function AlbumManagementModal({ albumId, onClose, onRefresh }) {
+  const { confirm } = useDialog();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [album, setAlbum] = useState(null);
-  const [availableTracks, setAvailableTracks] = useState([]); // Loose unassigned tracks
-  
+  const [availableTracks, setAvailableTracks] = useState([]);
+
   // Form elements
   const [editForm, setEditForm] = useState({ title: "", description: "", releaseYear: "" });
+  const [coverFile, setCoverFile] = useState(null);
+  const [coverPreview, setCoverPreview] = useState("");
   const [selectedTrackId, setSelectedTrackId] = useState("");
   const [error, setError] = useState("");
+
+  const fileInputRef = useRef(null);
 
   const fetchAlbumDetails = async () => {
     try {
       setLoading(true);
-      // Fetch focused album metadata including its current tracks roster
       const res = await axiosClient.get(`/albums/${albumId}`);
-      const data = res.data?.album || res.album || res.data;
+      const data = res.album;
       setAlbum(data);
       setEditForm({
         title: data.title || "",
@@ -26,47 +31,89 @@ export default function AlbumManagementModal({ albumId, onClose, onRefresh }) {
         releaseYear: data.releaseYear || new Date().getFullYear()
       });
 
-      // Also get available tracks to handle appends contextually
-      const tracksRes = await axiosClient.get(`/upload/unassigned-tracks`);
-      setAvailableTracks(tracksRes.tracks || []);
-    } catch (err) {
+      // Keep track of existing image address link if present
+      if (data.coverUrl) {
+        setCoverPreview(mediaUrl(data.coverUrl));
+      } else {
+        setCoverPreview("");
+      }
+      setCoverFile(null); // Reset file pointer
+    } catch {
       setError("Failed to sync structural data details.");
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { if (albumId) fetchAlbumDetails(); }, [albumId]);
+  const fetchUnassignedTracks = async () => {
+    try {
+      const tracksRes = await axiosClient.get(`/upload/unassigned-tracks`);
+      setAvailableTracks(tracksRes.tracks || []);
+    } catch {
+      console.error("Failed fetching unassigned catalog paths");
+    }
+  };
+
+  useEffect(() => {
+    if (albumId) {
+      fetchAlbumDetails();
+      fetchUnassignedTracks();
+    }
+    // Fetch functions intentionally reset modal-local state for this album.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [albumId]);
+
+  const handleFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setCoverFile(file);
+    setCoverPreview(URL.createObjectURL(file));
+  };
 
   const handleUpdateAlbum = async (e) => {
     e.preventDefault();
     if (!editForm.title.trim()) return;
 
     setSaving(true);
+    setError("");
+
     try {
-      await axiosClient.patch(`/albums/${albumId}`, {
-        title: editForm.title.trim(),
-        description: editForm.description.trim(),
-        releaseYear: parseInt(editForm.releaseYear, 10)
+      // Package into FormData because we are transmitting binary streams
+      const formData = new FormData();
+      formData.append("title", editForm.title.trim());
+      formData.append("description", editForm.description.trim());
+      formData.append("releaseYear", editForm.releaseYear);
+      if (coverFile) {
+        formData.append("cover", coverFile);
+      }
+
+      await axiosClient.patch(`/albums/${albumId}`, formData, {
+        headers: { "Content-Type": "multipart/form-data" }
       });
-      fetchAlbumDetails();
+
+      await fetchAlbumDetails();
       onRefresh();
     } catch (err) {
-      setError("Failed to modify metadata configurations.");
+      setError(err.message || "Failed to modify metadata configurations.");
     } finally {
       setSaving(false);
     }
   };
 
   const handleDeleteAlbum = async () => {
-    if (!window.confirm("CRITICAL: Deleting this album directory will not erase songs, but it unbinds them back to standalone singles. Proceed?")) return;
-    
+    const approved = await confirm("The songs will remain in your catalog as standalone tracks, but this album will be permanently deleted.", {
+      title: "Delete album?",
+      confirmLabel: "Delete album",
+      danger: true,
+    });
+    if (!approved) return;
+
     try {
       setSaving(true);
       await axiosClient.delete(`/albums/${albumId}`);
       onRefresh();
       onClose();
-    } catch (err) {
+    } catch {
       setError("Failed to drop selected structural album folder.");
       setSaving(false);
     }
@@ -78,8 +125,9 @@ export default function AlbumManagementModal({ albumId, onClose, onRefresh }) {
       await axiosClient.patch(`/upload/track/${selectedTrackId}/assign-album`, { albumId });
       setSelectedTrackId("");
       fetchAlbumDetails();
+      fetchUnassignedTracks();
       onRefresh();
-    } catch (err) {
+    } catch {
       setError("Failed to bind target media track.");
     }
   };
@@ -88,8 +136,9 @@ export default function AlbumManagementModal({ albumId, onClose, onRefresh }) {
     try {
       await axiosClient.patch(`/upload/track/${trackId}/assign-album`, { albumId: null });
       fetchAlbumDetails();
+      fetchUnassignedTracks();
       onRefresh();
-    } catch (err) {
+    } catch {
       setError("Failed to drop track context safely.");
     }
   };
@@ -99,7 +148,7 @@ export default function AlbumManagementModal({ albumId, onClose, onRefresh }) {
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-zinc-900 border border-white/5 rounded-2xl w-full max-w-xl overflow-hidden shadow-2xl flex flex-col max-h-[85vh]">
-        
+
         {/* Modal Header */}
         <div className="p-5 border-b border-white/5 flex items-center justify-between bg-zinc-950">
           <div>
@@ -121,36 +170,66 @@ export default function AlbumManagementModal({ albumId, onClose, onRefresh }) {
               </div>
             )}
 
-            {/* Section A: Update Text Fields Info */}
+            {/* Section A: Update Text Fields Info & Media Cover Art */}
             <form onSubmit={handleUpdateAlbum} className="space-y-3 bg-zinc-950/40 p-4 rounded-xl border border-white/5">
-              <div className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Folder Metadata</div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Folder Metadata & Artwork</div>
+
+              <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center pb-2">
+                <div
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-20 h-20 bg-zinc-900 border border-white/10 rounded-xl overflow-hidden flex flex-col items-center justify-center cursor-pointer hover:border-emerald-500/50 relative group shrink-0"
+                >
+                  {coverPreview ? (
+                    <>
+                      <img src={coverPreview} alt="Album Cover Preview" className="w-full h-full object-cover" />
+                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-[9px] text-white font-bold transition-opacity">Change</div>
+                    </>
+                  ) : (
+                    <div className="text-center p-2 text-zinc-500 flex flex-col items-center gap-1">
+                      <i className="ti ti-photo text-lg" />
+                      <span className="text-[9px]">Add Cover</span>
+                    </div>
+                  )}
+                </div>
                 <input
-                  type="text"
-                  value={editForm.title}
-                  onChange={(e) => setEditForm(v => ({ ...v, title: e.target.value }))}
-                  placeholder="Album Title"
-                  required
-                  className="sm:col-span-2 bg-zinc-900 border border-white/5 px-3 py-2 rounded-lg text-zinc-200 outline-none focus:border-emerald-500"
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleFileChange}
+                  accept="image/*"
+                  className="hidden"
                 />
-                <input
-                  type="number"
-                  value={editForm.releaseYear}
-                  onChange={(e) => setEditForm(v => ({ ...v, releaseYear: e.target.value }))}
-                  placeholder="Release Year"
-                  className="bg-zinc-900 border border-white/5 px-3 py-2 rounded-lg text-zinc-200 outline-none focus:border-emerald-500"
-                />
+
+                <div className="flex-1 w-full space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <input
+                      type="text"
+                      value={editForm.title}
+                      onChange={(e) => setEditForm(v => ({ ...v, title: e.target.value }))}
+                      placeholder="Album Title"
+                      required
+                      className="sm:col-span-2 bg-zinc-900 border border-white/5 px-3 py-2 rounded-lg text-zinc-200 outline-none focus:border-emerald-500"
+                    />
+                    <input
+                      type="number"
+                      value={editForm.releaseYear}
+                      onChange={(e) => setEditForm(v => ({ ...v, releaseYear: e.target.value }))}
+                      placeholder="Release Year"
+                      className="bg-zinc-900 border border-white/5 px-3 py-2 rounded-lg text-zinc-200 outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                  <input
+                    type="text"
+                    value={editForm.description}
+                    onChange={(e) => setEditForm(v => ({ ...v, description: e.target.value }))}
+                    placeholder="Album summary description notes..."
+                    className="w-full bg-zinc-900 border border-white/5 px-3 py-2 rounded-lg text-zinc-200 outline-none focus:border-emerald-500"
+                  />
+                </div>
               </div>
-              <input
-                type="text"
-                value={editForm.description}
-                onChange={(e) => setEditForm(v => ({ ...v, description: e.target.value }))}
-                placeholder="Album summary description notes..."
-                className="w-full bg-zinc-900 border border-white/5 px-3 py-2 rounded-lg text-zinc-200 outline-none focus:border-emerald-500"
-              />
+
               <div className="flex items-center justify-between pt-1">
-                <button type="submit" disabled={saving} className="bg-emerald-600 text-white font-bold uppercase tracking-wider px-4 py-2 rounded-lg border-0 cursor-pointer hover:bg-emerald-500">
-                  Save Configurations
+                <button type="submit" disabled={saving} className="bg-emerald-600 text-white font-bold uppercase tracking-wider px-4 py-2 rounded-lg border-0 cursor-pointer hover:bg-emerald-500 disabled:opacity-50">
+                  {saving ? "Saving Changes..." : "Save Configurations"}
                 </button>
                 <button type="button" onClick={handleDeleteAlbum} disabled={saving} className="bg-transparent border border-red-500/20 hover:bg-red-500/5 text-red-400 font-bold uppercase tracking-wider px-3 py-2 rounded-lg cursor-pointer">
                   Delete Album Container

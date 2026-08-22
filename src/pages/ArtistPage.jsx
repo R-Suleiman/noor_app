@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import Avatar from "../components/Avatar";
 import TrackRow from "../components/TrackRow";
 import Spinner from "../components/Spinner";
-import { axiosClient, GENRE_BG } from "../lib/api";
+import { axiosClient, GENRE_BG, mediaUrl } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { usePlayer } from "../context/PlayerContext";
 
@@ -11,6 +11,7 @@ export default function ArtistPage() {
   const { artistId } = useParams();
   const { user } = useAuth();
   const { play } = usePlayer();
+  const navigate = useNavigate();
 
   const [artist, setArtist] = useState(null);
   const [tracks, setTracks] = useState([]);
@@ -18,7 +19,6 @@ export default function ArtistPage() {
   const [following, setFollowing] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  const API_BASE_URL = "http://localhost:3001";
 
   const trackBg = (t) => t?.bg ?? GENRE_BG[t?.genre] ?? "bg-zinc-800";
   const fmtNum = (n) =>
@@ -57,7 +57,8 @@ export default function ArtistPage() {
     const next = !following;
     setFollowing(next);
     try {
-      await axiosClient.post(`/users/${artistId}/follow`);
+      if (next) await axiosClient.put(`/artists/${artist.id}/follow`);
+      else await axiosClient.delete(`/artists/${artist.id}/follow`);
       setArtist((prev) => ({
         ...prev,
         _count: {
@@ -95,7 +96,7 @@ export default function ArtistPage() {
       >
         {artist.coverUrl && (
           <img
-            src={`${API_BASE_URL}${artist.coverUrl}`}
+            src={mediaUrl(artist.coverUrl)}
             alt="Cover background"
             className="absolute inset-0 w-full h-full object-cover"
           />
@@ -107,7 +108,7 @@ export default function ArtistPage() {
           <div className="relative flex-shrink-0">
             <Avatar
               name={artist.name}
-              url={`${API_BASE_URL}${artist.avatarUrl}`}
+              url={mediaUrl(artist.avatarUrl)}
               size="xl"
               className="ring-4 ring-zinc-950 shadow-2xl"
             />
@@ -199,7 +200,7 @@ export default function ArtistPage() {
           {tab === "tracks" && (
             <div className="flex flex-col gap-1">
               {tracks.map((t, i) => (
-                <TrackRow key={t.id} track={t} index={i} />
+                <TrackRow key={t.id} track={t} index={i} trackList={tracks} />
               ))}
               {!tracks.length && (
                 <div className="text-center py-16 border border-dashed border-white/5 rounded-2xl bg-zinc-900/20">
@@ -217,12 +218,13 @@ export default function ArtistPage() {
               {(artist.albums ?? []).map((al) => (
                 <div
                   key={al.id}
+                  onClick={() => navigate(`/albums/${al.id}`)}
                   className="bg-zinc-900/40 border border-white/5 rounded-xl p-4 cursor-pointer hover:bg-zinc-900/80 transition-all group"
                 >
                   <div className="w-full aspect-square rounded-lg mb-3 bg-zinc-800 flex items-center justify-center overflow-hidden relative border border-white/5">
                     {al.coverUrl ? (
                       <img
-                        src={al.coverUrl}
+                        src={mediaUrl(al.coverUrl)}
                         alt={al.title}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                       />

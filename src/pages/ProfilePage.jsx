@@ -2,15 +2,16 @@ import { useEffect, useState, useRef } from "react";
 import Avatar from "../components/Avatar";
 import TrackRow from "../components/TrackRow";
 import Spinner from "../components/Spinner";
-import { axiosClient, fmtNum } from "../lib/api";
+import { axiosClient, fmtNum, mediaUrl } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
-import { useNavigate } from "react-router-dom";
-import AlbumManagementModal from "../components/AlbumManagementModal";
+import { useNavigate, useParams } from "react-router-dom";
+import { useDialog } from "../context/DialogContext";
 
-export default function ProfilePage({ userId }) {
-  const { user: authUser, logout } = useAuth();
-  const API_BASE_URL = "http://localhost:3001";
+export default function ProfilePage() {
+  const { userId } = useParams();
+  const { user: authUser, logout, updateCurrentUser } = useAuth();
   const navigate = useNavigate();
+  const { alert: showAlert, confirm, prompt } = useDialog();
 
   // Profile Core Data States
   const [profile, setProfile] = useState(null);
@@ -28,13 +29,13 @@ export default function ProfilePage({ userId }) {
   const [uploadingCover, setUploadingCover] = useState(false);
   const [albums, setAlbums] = useState([]);
   const [loadingLibrary, setLoadingLibrary] = useState(false);
-  const [managingAlbumId, setManagingAlbumId] = useState(null);
 
   // Create New Album Inline Form State
   const [newAlbum, setNewAlbum] = useState({
     title: "",
     description: "",
     releaseYear: new Date().getFullYear(),
+    coverFile: null,
   });
   const [creatingAlbum, setCreatingAlbum] = useState(false);
 
@@ -59,7 +60,7 @@ export default function ProfilePage({ userId }) {
     axiosClient
       .get(`/users/${uid}`)
       .then((res) => {
-        const userData = res.data?.user || res.user || res.data;
+        const userData = res.user;
         if (!userData) throw new Error("Malformed data signature.");
 
         setProfile(userData);
@@ -92,7 +93,7 @@ export default function ProfilePage({ userId }) {
       axiosClient
         .get(`/artists/${uid}/albums`)
         .then((res) => {
-          setAlbums(res.data?.albums || res.albums || []);
+          setAlbums(res.albums || []);
         })
         .catch((err) => {
           console.error("Failed to load library albums:", err);
@@ -123,8 +124,12 @@ export default function ProfilePage({ userId }) {
 
       if (type === "avatar") {
         setProfile((prev) => ({ ...prev, avatarUrl: data.avatarUrl }));
+        updateCurrentUser({ avatarUrl: data.avatarUrl });
       } else if (type === "cover") {
-        setArtist((prev) => ({ ...prev, coverUrl: data.coverUrl }));
+        setProfile((prev) => ({
+          ...prev,
+          artistProfile: { ...prev.artistProfile, coverUrl: data.coverUrl },
+        }));
       }
     } catch (err) {
       setError(
@@ -154,8 +159,13 @@ export default function ProfilePage({ userId }) {
         location: form.location.trim(),
       });
 
-      const updatedUser = res.data?.user || res.user || res.data;
+      const updatedUser = res.user;
       setProfile((prev) => ({ ...prev, ...updatedUser }));
+      updateCurrentUser({
+        displayName: updatedUser.displayName,
+        avatarUrl: updatedUser.avatarUrl,
+        artistProfile: updatedUser.artistProfile,
+      });
       setEditing(false);
     } catch (err) {
       setError(
@@ -174,19 +184,32 @@ export default function ProfilePage({ userId }) {
 
     setCreatingAlbum(true);
     try {
-      const res = await axiosClient.post("/upload/album", {
-        title: newAlbum.title.trim(),
-        description: newAlbum.description.trim(),
-        releaseYear:
-          parseInt(newAlbum.releaseYear, 10) || new Date().getFullYear(),
+      const formData = new FormData();
+      formData.append("title", newAlbum.title.trim());
+      formData.append("description", newAlbum.description.trim());
+      formData.append(
+        "releaseYear",
+        parseInt(newAlbum.releaseYear, 10) || new Date().getFullYear(),
+      );
+
+      if (newAlbum.coverFile) {
+        formData.append("cover", newAlbum.coverFile);
+      }
+
+      const res = await axiosClient.post("/albums", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
       });
-      const created = res.data?.album || res.album;
+
+      const created = res.album;
       if (created) {
         setAlbums((prev) => [created, ...prev]);
         setNewAlbum({
           title: "",
           description: "",
           releaseYear: new Date().getFullYear(),
+          coverFile: null,
         });
       }
     } catch (err) {
@@ -201,14 +224,13 @@ export default function ProfilePage({ userId }) {
 
   // Track Deletion Handler for Library View
   const handleDeleteTrack = async (trackId) => {
-    if (
-      !window.confirm(
-        "Are you sure you want to permanently remove this track from your public catalog?",
-      )
-    )
-      return;
+    const approved = await confirm(
+      "This permanently removes the track from your public catalog.",
+      { title: "Delete track?", confirmLabel: "Delete track", danger: true },
+    );
+    if (!approved) return;
     try {
-      await axiosClient.delete(`/upload/track/${trackId}`);
+      await axiosClient.delete(`/tracks/${trackId}`);
       setProfile((prev) => {
         const targetKey = prev.artistProfile ? "artistProfile" : "tracks";
         if (targetKey === "artistProfile") {
@@ -226,10 +248,112 @@ export default function ProfilePage({ userId }) {
         };
       });
     } catch (err) {
-      alert(
+      showAlert(
         err.response?.data?.error ||
           "Failed to drop chosen track asset from core system.",
+        { title: "Track could not be deleted" },
       );
+    }
+  };
+
+  const handleEditTrack = async (track) => {
+    const title = await prompt("Update the title shown throughout Noor.", {
+      title: "Edit track title",
+      label: "Track title",
+      initialValue: track.title,
+      confirmLabel: "Save title",
+    });
+    if (!title?.trim() || title.trim() === track.title) return;
+    try {
+      const response = await axiosClient.patch(`/tracks/${track.id}`, { title: title.trim() });
+      setProfile((currentProfile) => ({
+        ...currentProfile,
+        artistProfile: {
+          ...currentProfile.artistProfile,
+          tracks: currentProfile.artistProfile.tracks.map((item) => item.id === track.id ? { ...item, ...response.track } : item),
+        },
+      }));
+    } catch (requestError) {
+      setError(requestError.message);
+    }
+  };
+
+  const toggleTrackPublished = async (track) => {
+    try {
+      const response = await axiosClient.patch(`/tracks/${track.id}`, { isPublished: !track.isPublished });
+      setProfile((currentProfile) => ({
+        ...currentProfile,
+        artistProfile: {
+          ...currentProfile.artistProfile,
+          tracks: currentProfile.artistProfile.tracks.map((item) => item.id === track.id ? { ...item, ...response.track } : item),
+        },
+      }));
+    } catch (requestError) {
+      setError(requestError.message);
+    }
+  };
+
+  const handleChangePassword = async () => {
+    const currentPassword = await prompt("Enter your current password to authorize this change.", {
+      title: "Change password",
+      label: "Current password",
+      inputType: "password",
+    });
+    if (!currentPassword) return;
+    const newPassword = await prompt("Use at least 8 characters for your new password.", {
+      title: "Choose a new password",
+      label: "New password",
+      inputType: "password",
+      confirmLabel: "Change password",
+      validate: (value) => value.length >= 8,
+    });
+    if (!newPassword) return;
+    try {
+      await axiosClient.patch("/auth/password", { currentPassword, newPassword });
+      await logout({ remote: false });
+      await showAlert("Your password was changed. Please sign in again.", { title: "Password updated" });
+      navigate("/auth");
+    } catch (requestError) {
+      setError(requestError.message);
+    }
+  };
+
+  const handleLogout = async () => {
+    await logout();
+    navigate("/");
+  };
+
+  const exportAccount = async () => {
+    const data = await axiosClient.get("/account/export");
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "noor-account-export.json";
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const deleteAccount = async () => {
+    const approved = await confirm("Your account and owned catalog will be permanently deleted. This cannot be undone.", {
+      title: "Delete Noor account?",
+      confirmLabel: "Delete account",
+      danger: true,
+    });
+    if (!approved) return;
+    const password = await prompt("Enter your password to confirm permanent deletion.", {
+      title: "Confirm your password",
+      label: "Password",
+      inputType: "password",
+      confirmLabel: "Continue",
+    });
+    if (!password) return;
+    try {
+      await axiosClient.delete("/account", { data: { password } });
+      await logout({ remote: false });
+      navigate("/");
+    } catch (requestError) {
+      setError(requestError.message);
     }
   };
 
@@ -249,7 +373,7 @@ export default function ProfilePage({ userId }) {
           The requested profile account context was not found.
         </p>
         <button
-          onClick={() => navigate("login")}
+          onClick={() => navigate("/auth")}
           className="bg-zinc-800 text-zinc-200 px-5 py-2.5 rounded-xl text-xs font-semibold border-0 cursor-pointer"
         >
           Return to Sign In
@@ -288,7 +412,7 @@ export default function ProfilePage({ userId }) {
         className="h-44 sm:h-52 w-full bg-cover bg-center bg-no-repeat relative rounded-b-2xl border-b border-white/5 overflow-hidden group/cover"
         style={{
           backgroundImage: artist?.coverUrl
-            ? `linear-gradient(to bottom, rgba(9, 9, 11, 0.2), rgba(9, 9, 11, 0.8)), url(${API_BASE_URL}${artist.coverUrl})`
+            ? `linear-gradient(to bottom, rgba(9, 9, 11, 0.2), rgba(9, 9, 11, 0.8)), url(${mediaUrl(artist.coverUrl)})`
             : `linear-gradient(to right, #18181b, rgba(24, 24, 27, 0.5))`,
         }}
       >
@@ -319,7 +443,7 @@ export default function ProfilePage({ userId }) {
           <div className="relative group rounded-full flex-shrink-0">
             <Avatar
               name={profile.displayName}
-              url={`${API_BASE_URL}${profile.avatarUrl}`}
+              url={mediaUrl(profile.avatarUrl)}
               size="xl"
               className="shadow-2xl ring-4 ring-zinc-950 w-32 h-32 sm:w-40 sm:h-40 object-cover"
             />
@@ -441,7 +565,15 @@ export default function ProfilePage({ userId }) {
                       <i className="ti ti-edit" /> Edit Details
                     </button>
                     <button
-                      onClick={logout}
+                      onClick={handleChangePassword}
+                      className="text-xs font-bold uppercase tracking-wider text-zinc-500 hover:text-zinc-200 border border-white/5 px-5 py-2.5 rounded-xl bg-zinc-900 cursor-pointer transition-all"
+                    >
+                      Password
+                    </button>
+                    <button onClick={exportAccount} className="text-xs font-bold uppercase tracking-wider text-zinc-500 hover:text-zinc-200 border border-white/5 px-5 py-2.5 rounded-xl bg-zinc-900 cursor-pointer transition-all">Export</button>
+                    <button onClick={deleteAccount} className="text-xs font-bold uppercase tracking-wider text-zinc-500 hover:text-red-400 border border-white/5 px-5 py-2.5 rounded-xl bg-zinc-900 cursor-pointer transition-all">Delete</button>
+                    <button
+                      onClick={handleLogout}
                       className="text-xs font-bold uppercase tracking-wider text-zinc-500 hover:text-red-400 border border-white/5 hover:border-red-500/10 px-5 py-2.5 rounded-xl bg-zinc-900 hover:bg-red-950/20 cursor-pointer transition-all"
                     >
                       Sign Out
@@ -596,14 +728,22 @@ export default function ProfilePage({ userId }) {
               {activeTab === "tracks" && isArtist && (
                 <>
                   {publishedTracks.map((track, i) => (
-                    <TrackRow
-                      key={track.id}
-                      track={{
-                        ...track,
-                        artist: { name: profile.displayName },
-                      }}
-                      index={i}
-                    />
+                    <div key={track.id} className="flex items-center gap-2">
+                      <div className={`flex-1 ${track.isPublished ? "" : "opacity-50"}`}>
+                        <TrackRow
+                          track={{ ...track, artist: { name: profile.displayName } }}
+                          index={i}
+                          trackList={publishedTracks}
+                        />
+                      </div>
+                      {isOwn && (
+                        <div className="flex gap-1">
+                          <button onClick={() => handleEditTrack(track)} title="Edit title" className="bg-transparent text-zinc-500 hover:text-zinc-200 border-0 cursor-pointer"><i className="ti ti-edit" /></button>
+                          <button onClick={() => toggleTrackPublished(track)} title={track.isPublished ? "Unpublish" : "Publish"} className="bg-transparent text-zinc-500 hover:text-emerald-400 border-0 cursor-pointer"><i className={`ti ${track.isPublished ? "ti-eye-off" : "ti-eye"}`} /></button>
+                          <button onClick={() => handleDeleteTrack(track.id)} title="Delete" className="bg-transparent text-zinc-500 hover:text-red-400 border-0 cursor-pointer"><i className="ti ti-trash" /></button>
+                        </div>
+                      )}
+                    </div>
                   ))}
                   {publishedTracks.length === 0 && (
                     <div className="text-center py-16 bg-zinc-900/20 border border-dashed border-white/5 rounded-2xl p-6">
@@ -613,7 +753,7 @@ export default function ProfilePage({ userId }) {
                       </p>
                       {isOwn && (
                         <button
-                          onClick={() => navigate("upload")}
+                          onClick={() => navigate("/upload")}
                           className="mt-4 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold uppercase tracking-wider px-4 py-2 rounded-xl border-0 cursor-pointer transition-colors"
                         >
                           Upload First Track
@@ -692,6 +832,25 @@ export default function ProfilePage({ userId }) {
                       }
                       className="w-full bg-zinc-950 border border-white/5 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-zinc-100 outline-none font-medium"
                     />
+
+                    {/* File Upload Selector Block for Cover Art */}
+                    <div className="space-y-1">
+                      <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-500">
+                        Album Cover Artwork
+                      </label>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) =>
+                          setNewAlbum((prev) => ({
+                            ...prev,
+                            coverFile: e.target.files?.[0] || null,
+                          }))
+                        }
+                        className="w-full text-xs text-zinc-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-zinc-800 file:text-zinc-200 hover:file:bg-zinc-700 file:cursor-pointer"
+                      />
+                    </div>
+
                     <button
                       type="submit"
                       disabled={creatingAlbum}
@@ -718,17 +877,30 @@ export default function ProfilePage({ userId }) {
                               key={alb.id}
                               className="bg-zinc-900/40 border border-white/5 rounded-xl p-3 flex items-center justify-between"
                             >
-                              <div className="min-w-0 flex-1">
-                                <p className="text-xs font-bold text-white truncate">
-                                  {alb.title}
-                                </p>
-                                <p className="text-[11px] text-zinc-500 mt-0.5">
-                                  {alb.releaseYear || "N/A"} •{" "}
-                                  {alb._count?.tracks ?? 0} tracks
-                                </p>
+                              <div className="min-w-0 flex-1 flex items-center gap-3">
+                                {alb.coverUrl ? (
+                                  <img
+                                    src={mediaUrl(alb.coverUrl)}
+                                    alt={alb.title}
+                                    className="w-10 h-10 object-cover rounded-lg bg-zinc-800 flex-shrink-0"
+                                  />
+                                ) : (
+                                  <div className="w-10 h-10 rounded-lg bg-zinc-800 flex items-center justify-center text-zinc-600 flex-shrink-0">
+                                    <i className="ti ti-disc text-base" />
+                                  </div>
+                                )}
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-xs font-bold text-white truncate">
+                                    {alb.title}
+                                  </p>
+                                  <p className="text-[11px] text-zinc-500 mt-0.5">
+                                    {alb.releaseYear || "N/A"} •{" "}
+                                    {alb._count?.tracks ?? 0} tracks
+                                  </p>
+                                </div>
                               </div>
                               <button
-                                onClick={() => setManagingAlbumId(alb.id)}
+                                onClick={() => navigate(`/albums/${alb.id}`)}
                                 className="bg-zinc-800 hover:bg-zinc-700 text-[11px] font-bold p-2 px-3 rounded-lg border-0 cursor-pointer text-zinc-200"
                               >
                                 Manage
@@ -737,15 +909,6 @@ export default function ProfilePage({ userId }) {
                           ))}
                         </div>
 
-                        {managingAlbumId && (
-                          <AlbumManagementModal
-                            albumId={managingAlbumId}
-                            onClose={() => setManagingAlbumId(null)}
-                            onRefresh={() => {
-                              navigate(0);
-                            }}
-                          />
-                        )}
                         {albums.length === 0 && (
                           <p className="text-xs text-zinc-600 italic col-span-2 py-4 text-center">
                             No studio albums created under this artist handle
@@ -814,7 +977,7 @@ export default function ProfilePage({ userId }) {
                   {playlistCollection.map((pl) => (
                     <div
                       key={pl.id}
-                      onClick={() => navigate(`playlists/${pl.id}`)}
+                      onClick={() => navigate(`/playlists/${pl.id}`)}
                       className="flex items-center gap-4 bg-zinc-900/30 hover:bg-zinc-900/80 border border-white/5 rounded-xl p-3 cursor-pointer transition-colors group"
                     >
                       <div className="w-12 h-12 rounded-lg bg-zinc-800 flex items-center justify-center border border-white/5 flex-shrink-0 group-hover:border-emerald-500/20 transition-colors">

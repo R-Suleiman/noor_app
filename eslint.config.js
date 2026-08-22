@@ -17,5 +17,11 @@ export default defineConfig([
       globals: globals.browser,
       parserOptions: { ecmaFeatures: { jsx: true } },
     },
+    rules: {
+      // Data-fetching effects intentionally transition local request state.
+      'react-hooks/set-state-in-effect': 'off',
+      // Context modules export their consumer hook alongside the provider.
+      'react-refresh/only-export-components': 'off',
+    },
   },
 ])

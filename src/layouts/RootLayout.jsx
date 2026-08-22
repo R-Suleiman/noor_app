@@ -1,6 +1,7 @@
 import { Outlet, NavLink, useNavigate } from "react-router-dom";
 import PlayerBar from "../components/PlayerBar";
 import SidebarUser from "../components/SidebarUser";
+import { useAuth } from "../context/AuthContext";
 
 const NAV = [
   { path: "/",        label: "Home",       icon: "ti-home"         },
@@ -8,23 +9,31 @@ const NAV = [
   { path: "/search",  label: "Search",     icon: "ti-search"       },
   { path: "/library", label: "My Library", icon: "ti-library"      },
   { path: "/upload",  label: "Upload",     icon: "ti-cloud-upload" },
+  { path: "/admin",   label: "Admin",      icon: "ti-shield"       },
 ];
 
 export default function RootLayout() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const visibleNav = NAV.filter((item) => {
+    if (item.path === "/upload") return user?.role === "ARTIST";
+    if (item.path === "/admin") return user?.role === "ADMIN";
+    if (item.path === "/library") return Boolean(user);
+    return true;
+  });
 
   return (
-    <div className="grid bg-zinc-950 text-zinc-100 overflow-hidden"
-      style={{ gridTemplateColumns: "240px 1fr", gridTemplateRows: "1fr 80px", height: "100vh", fontFamily: "'Nunito Sans',system-ui,sans-serif" }}>
+    <div className="grid grid-cols-1 grid-rows-[56px_minmax(0,1fr)_80px] md:grid-cols-[240px_minmax(0,1fr)] md:grid-rows-[minmax(0,1fr)_80px] bg-zinc-950 text-zinc-100 overflow-hidden h-screen"
+      style={{ fontFamily: "'Nunito Sans',system-ui,sans-serif" }}>
 
-      <aside className="bg-zinc-900 border-r border-white/5 flex flex-col overflow-hidden" style={{ gridRow: "1/2" }}>
+      <aside className="hidden md:flex bg-zinc-900 border-r border-white/5 flex-col overflow-hidden row-start-1">
         <div className="px-6 py-7 border-b border-white/5 flex-shrink-0">
           <p className="text-emerald-400 text-lg font-semibold tracking-wide" style={{ fontFamily: "'Cinzel',serif" }}>نـور · Noor</p>
           <p className="text-xs tracking-widest text-zinc-600 uppercase mt-0.5">Islamic Audio</p>
         </div>
         
         <nav className="p-3 flex-1 overflow-y-auto">
-          {NAV.map(n => (
+          {visibleNav.map(n => (
             <NavLink 
               key={n.path} 
               to={n.path}
@@ -45,7 +54,16 @@ export default function RootLayout() {
         <SidebarUser navigate={navigate} />
       </aside>
 
-      <main className="overflow-y-auto" style={{ gridRow: "1/2" }}>
+      <header className="md:hidden row-start-1 flex items-center gap-1 px-2 bg-zinc-900 border-b border-white/5 overflow-x-auto">
+        {visibleNav.map((item) => (
+          <NavLink key={item.path} to={item.path} aria-label={item.label} className={({ isActive }) => `w-10 h-10 rounded-lg flex items-center justify-center ${isActive ? "text-emerald-400 bg-emerald-500/10" : "text-zinc-500"}`}>
+            <i className={`ti ${item.icon}`} />
+          </NavLink>
+        ))}
+        <button onClick={() => navigate(user ? `/profile/${user.id}` : "/auth")} className="ml-auto w-10 h-10 rounded-lg bg-transparent border-0 text-zinc-400"><i className={`ti ${user ? "ti-user" : "ti-login"}`} /></button>
+      </header>
+
+      <main className="overflow-y-auto row-start-2 md:row-start-1 md:col-start-2">
         <Outlet />
       </main>
 

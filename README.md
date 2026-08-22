@@ -1,16 +1,38 @@
-# React + Vite
+# Noor frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React/Vite client for Noor, an Islamic audio streaming platform.
 
-Currently, two official plugins are available:
+## Setup
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+```bash
+cp .env.example .env
+npm install
+npm run dev
+```
 
-## React Compiler
+The development client runs at `http://localhost:3000`. Set
+`VITE_API_BASE_URL` when the Fastify API is hosted elsewhere.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Commands
 
-## Expanding the ESLint configuration
+```bash
+npm run dev
+npm run lint
+npm run build
+npm run preview
+```
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## Main flows
+
+- Public home, browse, search, artist, album, and audio streaming.
+- Listener authentication, likes, follows, saved albums, history, and playlists.
+- Artist profile, album, upload, catalog, and publication management.
+- Administrator account, artist verification, role, and publication moderation.
+
+The API URL and all media URLs are normalized through `src/lib/api.js`.
+
+## Vercel deployment
+
+Import this repository as a Vite project, set `VITE_API_BASE_URL` to the
+deployed Render API origin, and use `dist` as the output directory. The checked
+in `vercel.json` preserves React Router routes when opened directly.

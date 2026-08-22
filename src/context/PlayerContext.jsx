@@ -8,39 +8,71 @@ import {
 } from "react";
 import { Howl } from "howler";
 import { axiosClient, API } from "../lib/api";
+import { useAuth } from "./AuthContext"; // 1. Import useAuth
 
 const PlayerCtx = createContext(null);
 export const usePlayer = () => useContext(PlayerCtx);
 
+const formatTime = (secs) => {
+  if (isNaN(secs) || secs === null) return "0:00";
+  const minutes = Math.floor(secs / 60);
+  const seconds = Math.floor(secs % 60);
+  const returnedSeconds = seconds < 10 ? `0${seconds}` : `${seconds}`;
+  return `${minutes}:${returnedSeconds}`;
+};
+
 export function PlayerProvider({ children }) {
+  const { user } = useAuth(); // 2. Access current authenticated user
   const howlRef = useRef(null);
   const seekRafRef = useRef(null);
-
-  // Keeps track of the active track object in a mutable reference to avoid re-binding callbacks
   const currentTrackRef = useRef(null);
+  const playbackSessionRef = useRef(null);
+  const playRecordedRef = useRef(false);
+  const userRef = useRef(user);
+  const advanceRef = useRef(null);
+  const repeatRef = useRef("off");
 
   const [current, setCurrent] = useState(null);
   const [queue, setQueue] = useState([]);
-  const [status, setStatus] = useState("idle"); // idle | loading | playing | paused | error
-  const [progress, setProgress] = useState(0); // 0–100
-  const [elapsed, setElapsed] = useState(0); // seconds
-  const [duration, setDuration] = useState(0); // seconds
-  const [volume, setVolState] = useState(0.75);
+  const [status, setStatus] = useState("idle");
+  const [progress, setProgress] = useState(0);
+  const [elapsed, setElapsed] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [volume, setVolState] = useState(() => Number(localStorage.getItem("noor_volume") ?? 0.75));
+  const [shuffle, setShuffle] = useState(false);
+  const [repeatMode, setRepeatMode] = useState("off");
 
-  // Synchronize the component state to our reference hook
+  useEffect(() => {
+    repeatRef.current = repeatMode;
+  }, [repeatMode]);
+
   useEffect(() => {
     currentTrackRef.current = current;
   }, [current]);
 
-  // ── seek bar animation rAF frame loop ──────────────────────────────────────
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
+
   const startSeekLoop = useCallback(() => {
     const tick = () => {
       const h = howlRef.current;
       if (!h) return;
       const pos = typeof h.seek() === "number" ? h.seek() : 0;
       const dur = h.duration() || 0;
+
       setElapsed(pos);
       setProgress(dur > 0 ? (pos / dur) * 100 : 0);
+      const threshold = Math.min(30, Math.max(5, dur * 0.5));
+      if (!playRecordedRef.current && pos >= threshold) {
+        playRecordedRef.current = true;
+        axiosClient.post(`/tracks/${currentTrackRef.current.id}/play`, {
+          sessionId: playbackSessionRef.current,
+          listenedMs: Math.round(pos * 1000),
+        }).catch(() => {
+          playRecordedRef.current = false;
+        });
+      }
       seekRafRef.current = requestAnimationFrame(tick);
     };
     cancelAnimationFrame(seekRafRef.current);
@@ -51,7 +83,6 @@ export function PlayerProvider({ children }) {
     cancelAnimationFrame(seekRafRef.current);
   }, []);
 
-  // ── tear down current Howl instance ────────────────────────────────────────
   const destroyCurrent = useCallback(() => {
     stopSeekLoop();
     if (howlRef.current) {
@@ -61,10 +92,30 @@ export function PlayerProvider({ children }) {
     }
   }, [stopSeekLoop]);
 
+  // 3. Reset player method
+  const resetPlayer = useCallback(() => {
+    destroyCurrent();
+    setCurrent(null);
+    setQueue([]);
+    setStatus("idle");
+    setProgress(0);
+    setElapsed(0);
+    setDuration(0);
+  }, [destroyCurrent]);
+
+  // 4. Automatically clear/reset state when user logs out or switches
+  const prevUserIdRef = useRef(user?.id);
+  useEffect(() => {
+    // If the user ID changes (or user logs out)
+    if (prevUserIdRef.current !== user?.id) {
+      resetPlayer();
+      prevUserIdRef.current = user?.id;
+    }
+  }, [user?.id, resetPlayer]);
+
   // ── core player control execution routine ──────────────────────────────────
   const play = useCallback(
     (track, newQueue = []) => {
-      // If the same track is requested while loaded, simply toggle its state
       if (howlRef.current && currentTrackRef.current?.id === track.id) {
         if (howlRef.current.state() === "loaded") {
           howlRef.current.play();
@@ -78,14 +129,15 @@ export function PlayerProvider({ children }) {
       setProgress(0);
       setElapsed(0);
       setDuration(0);
-      if (newQueue.length > 0) setQueue(newQueue);
+      setQueue(newQueue);
+      playbackSessionRef.current = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${track.id}`;
+      playRecordedRef.current = false;
 
-      // Stream directly from our range-request optimized Fastify endpoint
       const src = `${API}/tracks/${track.id}/stream`;
 
       const h = new Howl({
         src: [src],
-        html5: true, // Stream chunks natively without pre-buffering the complete audio file
+        html5: true,
         volume: volume,
         format: ["mp3", "wav", "flac", "m4a"],
         xhr: {
@@ -97,11 +149,6 @@ export function PlayerProvider({ children }) {
           setStatus("playing");
           startSeekLoop();
 
-          axiosClient
-            .post(`/tracks/${track.id}/play`, {
-              durationMs: h.duration() * 1000,
-            })
-            .catch(() => {});
         },
 
         onloaderror: (_id, err) => {
@@ -110,6 +157,7 @@ export function PlayerProvider({ children }) {
             err,
           );
           setStatus("error");
+          setTimeout(() => advanceRef.current?.(true), 1200);
         },
 
         onplayerror: (_id, err) => {
@@ -138,17 +186,7 @@ export function PlayerProvider({ children }) {
         onend: () => {
           stopSeekLoop();
           setProgress(100);
-          // Step into the next track in the queue safely using accurate state updates
-          setQueue((currentQueue) => {
-            const idx = currentQueue.findIndex((t) => t.id === track.id);
-            const next = currentQueue[idx + 1];
-            if (next) {
-              setTimeout(() => play(next, currentQueue), 300);
-            } else {
-              setStatus("paused");
-            }
-            return currentQueue;
-          });
+          setTimeout(() => advanceRef.current?.(true), 300);
         },
 
         onseek: () => {
@@ -184,18 +222,41 @@ export function PlayerProvider({ children }) {
   const setVolume = useCallback((v) => {
     const clamped = Math.max(0, Math.min(1, v));
     setVolState(clamped);
+    localStorage.setItem("noor_volume", String(clamped));
     if (howlRef.current) howlRef.current.volume(clamped);
   }, []);
 
-  const playNext = useCallback(() => {
+  const playNext = useCallback((fromEnd = false) => {
     const activeTrack = currentTrackRef.current;
     if (!queue.length || !activeTrack) return;
-    const next = queue[queue.findIndex((t) => t.id === activeTrack.id) + 1];
+    if (fromEnd && repeatRef.current === "one") {
+      howlRef.current?.seek(0);
+      howlRef.current?.play();
+      return;
+    }
+    const index = queue.findIndex((track) => track.id === activeTrack.id);
+    let next;
+    if (shuffle && queue.length > 1) {
+      const candidates = queue.filter((track) => track.id !== activeTrack.id);
+      next = candidates[Math.floor(Math.random() * candidates.length)];
+    } else {
+      next = queue[index + 1];
+    }
+    if (!next && repeatRef.current === "all") next = queue[0];
     if (next) play(next, queue);
-  }, [queue, play]);
+    else if (fromEnd) setStatus("paused");
+  }, [queue, play, shuffle]);
+
+  useEffect(() => {
+    advanceRef.current = playNext;
+  }, [playNext]);
+
+  const toggleShuffle = useCallback(() => setShuffle((value) => !value), []);
+  const cycleRepeat = useCallback(() => {
+    setRepeatMode((value) => value === "off" ? "all" : value === "all" ? "one" : "off");
+  }, []);
 
   const playPrev = useCallback(() => {
-    // If we are deep into a track (>3 seconds), restart it instead of changing songs
     if (
       howlRef.current &&
       typeof howlRef.current.seek() === "number" &&
@@ -210,12 +271,10 @@ export function PlayerProvider({ children }) {
     if (prev) play(prev, queue);
   }, [queue, play, seek]);
 
-  // Keep audio volume accurately bounded in real time
   useEffect(() => {
     if (howlRef.current) howlRef.current.volume(volume);
   }, [volume]);
 
-  // Cleanup on context unmount
   useEffect(() => () => destroyCurrent(), [destroyCurrent]);
 
   return (
@@ -227,9 +286,14 @@ export function PlayerProvider({ children }) {
         playing: status === "playing",
         buffering: status === "loading",
         progress,
+        elapsedFormatted: formatTime(elapsed),
+        durationFormatted: formatTime(duration),
         elapsed,
         duration,
+        progressRaw: progress,
         volume,
+        shuffle,
+        repeatMode,
         play,
         pause,
         resume,
@@ -238,6 +302,9 @@ export function PlayerProvider({ children }) {
         setVolume,
         playNext,
         playPrev,
+        toggleShuffle,
+        cycleRepeat,
+        resetPlayer,
       }}
     >
       {children}

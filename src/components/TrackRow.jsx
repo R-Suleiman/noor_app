@@ -1,7 +1,9 @@
-import { useState, useEffect } from "react";
 import { usePlayer } from "../context/PlayerContext";
 import { useAuth } from "../context/AuthContext";
-import { axiosClient, trackBg } from "../lib/api";
+import { axiosClient, mediaUrl, trackBg } from "../lib/api";
+import { useTrackLike } from "../hooks/useTrackLike";
+import { useDialog } from "../context/DialogContext";
+import HeartIcon from "./HeartIcon";
 
 export default function TrackRow({
   track,
@@ -11,12 +13,11 @@ export default function TrackRow({
 }) {
   const { play, togglePlay, current, playing } = usePlayer();
   const { user } = useAuth();
-  const [liked, setLiked] = useState(likedProp ?? false);
-
-  // Sync internal state with external updates from parent components
-  useEffect(() => {
-    setLiked(likedProp ?? false);
-  }, [likedProp]);
+  const { alert: showAlert, prompt, choose } = useDialog();
+  const { liked, likesCount, toggleLike } = useTrackLike({
+    ...track,
+    likedByMe: likedProp ?? track.likedByMe,
+  });
 
   const active = current?.id === track.id;
 
@@ -32,35 +33,51 @@ export default function TrackRow({
   const handleLike = async (e) => {
     e.stopPropagation(); // Prevent trigger from firing row selection actions
     if (!user) {
-      alert("Please sign in to save this audio track to your library.");
+      showAlert("Please sign in to save this audio track to your library.", { title: "Sign in required" });
       return;
     }
 
-    const previousState = liked;
-    setLiked(!previousState);
+    await toggleLike();
+  };
 
+  const handleAddToPlaylist = async (e) => {
+    e.stopPropagation();
+    if (!user) return;
     try {
-      if (!previousState) {
-        await axiosClient.post(`/tracks/${track.id}/like`);
-      } else {
-        await axiosClient.delete(`/tracks/${track.id}/like`);
+      let { playlists } = await axiosClient.get("/users/me/playlists");
+      if (!playlists.length) {
+        const title = await prompt("You need a playlist before adding this track.", {
+          title: "Create your first playlist",
+          label: "Playlist name",
+          confirmLabel: "Create playlist",
+        });
+        if (!title?.trim()) return;
+        const response = await axiosClient.post("/playlists", { title: title.trim() });
+        playlists = [response.playlist];
       }
-    } catch (err) {
-      console.error("Failed to update track like status:", err);
-      // Revert state if the API request fails
-      setLiked(previousState);
+      const playlistId = await choose("Select the collection for this track.", {
+        title: "Add to playlist",
+        options: playlists.map((playlist) => ({
+          value: playlist.id,
+          label: playlist.title,
+          meta: `${playlist._count?.tracks ?? 0} tracks`,
+        })),
+      });
+      if (!playlistId) return;
+      await axiosClient.put(`/playlists/${playlistId}/tracks/${track.id}`);
+    } catch (error) {
+      showAlert(error.message || "Could not add track to playlist", { title: "Playlist update failed" });
     }
   };
 
   return (
     <div
-      onDoubleClick={handleRowAction}
-      className={`group grid items-center gap-4 px-4 py-2 rounded-xl cursor-pointer transition-colors select-none ${
+      onClick={handleRowAction}
+      className={`group grid grid-cols-[32px_48px_minmax(0,1fr)_64px] md:grid-cols-[32px_48px_minmax(0,1fr)_120px_80px_64px] items-center gap-2 md:gap-4 px-2 md:px-4 py-2 rounded-xl cursor-pointer transition-colors select-none ${
         active
           ? "bg-emerald-500/10 border border-emerald-500/10"
           : "hover:bg-zinc-800/50 border border-transparent"
       }`}
-      style={{ gridTemplateColumns: "32px 48px 1fr 140px 80px 32px" }}
     >
       {/* Play Controls Index Column */}
       <div className="relative flex items-center justify-center w-8 h-8">
@@ -105,13 +122,13 @@ export default function TrackRow({
       >
         {track.album?.coverUrl ? (
           <img
-            src={track.album?.coverUrl}
+            src={mediaUrl(track.album?.coverUrl)}
             alt=""
             className="w-full h-full object-cover"
           />
         ) : track.coverUrl ? (
           <img
-            src={track.coverUrl}
+            src={mediaUrl(track.coverUrl)}
             alt=""
             className="w-full h-full object-cover"
           />
@@ -133,12 +150,12 @@ export default function TrackRow({
       </div>
 
       {/* Genre Tag Field */}
-      <span className="text-xs text-zinc-400 truncate tracking-wide bg-zinc-800 px-2.5 py-1 rounded-md max-w-max border border-white/5 font-medium capitalize">
+      <span className="hidden md:block text-xs text-zinc-400 truncate tracking-wide bg-zinc-800 px-2.5 py-1 rounded-md max-w-max border border-white/5 font-medium capitalize">
         {track.genre ? track.genre.toLowerCase() : "Audio"}
       </span>
 
       {/* Play Counter Output String Formatting */}
-      <span className="text-xs text-zinc-400 text-right font-mono tabular-nums">
+      <span className="hidden md:block text-xs text-zinc-400 text-right font-mono tabular-nums">
         {track.playCount
           ? track.playCount >= 1000
             ? `${(track.playCount / 1000).toFixed(1)}k`
@@ -148,14 +165,20 @@ export default function TrackRow({
       </span>
 
       {/* Reactive Favorite Activation Toggle Button */}
-      <button
-        onClick={handleLike}
-        className={`bg-transparent border-0 cursor-pointer p-1 text-lg transition-all transform hover:scale-110 duration-150 ${
-          liked ? "text-rose-500" : "text-zinc-500 hover:text-rose-400"
-        }`}
-      >
-        <i className={`ti ${liked ? "ti-heart-filled" : "ti-heart"}`} />
-      </button>
+      <div className="flex items-center justify-end gap-1">
+        <button onClick={handleAddToPlaylist} title="Add to playlist" className="bg-transparent border-0 cursor-pointer p-1 text-base text-zinc-500 hover:text-emerald-400">
+          <i className="ti ti-playlist-add" />
+        </button>
+        <button
+          onClick={handleLike}
+          aria-label={liked ? "Unlike track" : "Like track"}
+          title={liked ? "Unlike track" : "Like track"}
+          className={`inline-flex min-w-9 items-center justify-end gap-1 bg-transparent border-0 cursor-pointer p-1 transition-all transform hover:scale-105 duration-150 ${liked ? "text-rose-500" : "text-zinc-500 hover:text-rose-400"}`}
+        >
+          <HeartIcon filled={liked} className="h-[18px] w-[18px] shrink-0" />
+          <span className="min-w-3 text-right text-[10px] font-semibold tabular-nums">{likesCount}</span>
+        </button>
+      </div>
     </div>
   );
 }

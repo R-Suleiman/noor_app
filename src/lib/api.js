@@ -1,6 +1,14 @@
 import axios from "axios";
 
-export const API = "http://localhost:3001/api/v1";
+const configuredApi = import.meta.env?.VITE_API_BASE_URL || import.meta.env?.API_BASE_URL || "http://localhost:3001";
+export const API_ORIGIN = configuredApi.replace(/\/api\/v1\/?$/, "").replace(/\/$/, "");
+export const API = `${API_ORIGIN}/api/v1`;
+
+export const mediaUrl = (value) => {
+  if (!value) return "";
+  if (/^(https?:|blob:|data:)/i.test(value)) return value;
+  return `${API_ORIGIN}${value.startsWith("/") ? "" : "/"}${value}`;
+};
 
 export const GENRE_BG = { 
   QASIDAS: "bg-emerald-800", 
@@ -12,7 +20,12 @@ export const GENRE_BG = {
 };
 
 export const trackBg = t => t.bg ?? GENRE_BG[t.genre] ?? "bg-zinc-700";
-export const fmtDur = s => `${Math.floor(s/60)}:${String(s%60).padStart(2, "0")}`;
+export const fmtDur = s => {
+  if (isNaN(s) || s === null || s === undefined) return "0:00";
+  const mins = Math.floor(s / 60);
+  const secs = Math.floor(s % 60);
+  return `${mins}:${String(secs).padStart(2, "0")}`;
+};
 export const fmtNum = n => n >= 1000 ? `${(n/1000).toFixed(1)}k` : String(n ?? 0);
 
 // ─── Exported Axios Instance ─────────────────────────────────────────────────
@@ -51,8 +64,9 @@ axiosClient.interceptors.response.use(
       localStorage.removeItem("noor_token");
       localStorage.removeItem("noor_user");
       
-      if (!window.location.pathname.includes("/login") && !window.location.pathname.includes("/register")) {
-        window.location.href = "/login";
+      if (window.location.pathname !== "/auth") {
+        sessionStorage.setItem("noor_return_to", `${window.location.pathname}${window.location.search}`);
+        window.location.assign("/auth");
       }
     }
 

@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { usePlayer } from "../context/PlayerContext";
-import { useAuth } from "../context/AuthContext";
-import { trackBg, fmtDur } from "../lib/api";
+import { trackBg, fmtDur, mediaUrl } from "../lib/api";
 import Spinner from "./Spinner";
+import { useTrackLike } from "../hooks/useTrackLike";
+import HeartIcon from "./HeartIcon";
 
 export default function PlayerBar() {
   const {
@@ -18,30 +19,15 @@ export default function PlayerBar() {
     setVolume,
     playNext,
     playPrev,
+    shuffle,
+    repeatMode,
+    toggleShuffle,
+    cycleRepeat,
   } = usePlayer();
-  const { user } = useAuth();
-  const [liked, setLiked] = useState(false);
+  const { liked, likesCount, toggleLike } = useTrackLike(current);
   const [dragging, setDragging] = useState(false);
   const [dragVal, setDragVal] = useState(0);
   const barRef = useRef(null);
-
-  // Reset liked state when track changes
-  useEffect(() => {
-    setLiked(false);
-  }, [current?.id]);
-
-  const handleLike = async () => {
-    if (!user || !current) return;
-    const next = !liked;
-    setLiked(next);
-    try {
-      await apiFetch(`/tracks/${current.id}/like`, {
-        method: next ? "POST" : "DELETE",
-      });
-    } catch {
-      setLiked(!next);
-    }
-  };
 
   // Seek bar: click or drag
   const getPct = (e) => {
@@ -73,11 +59,10 @@ export default function PlayerBar() {
 
   return (
     <div
-      className="col-span-2 bg-zinc-900 border-t border-white/5 grid items-center px-6 gap-6"
-      style={{ gridTemplateColumns: "280px 1fr 200px", height: 80 }}
+      className="row-start-3 md:row-start-2 md:col-span-2 bg-zinc-900 border-t border-white/5 grid grid-cols-1 sm:grid-cols-[minmax(160px,280px)_1fr] md:grid-cols-[280px_1fr_200px] items-center px-3 sm:px-6 gap-3 sm:gap-6 h-20"
     >
       {/* Track info */}
-      <div className="flex items-center gap-3 min-w-0">
+      <div className="hidden sm:flex items-center gap-3 min-w-0">
         {current ? (
           <>
             <div
@@ -87,13 +72,13 @@ export default function PlayerBar() {
                 <Spinner sm />
               ) : current.album?.coverUrl ? (
                 <img
-                  src={current.album?.coverUrl}
+                  src={mediaUrl(current.album?.coverUrl)}
                   alt=""
                   className="w-full h-full object-cover"
                 />
               ) : current.coverUrl ? (
                 <img
-                  src={current.coverUrl}
+                  src={mediaUrl(current.coverUrl)}
                   alt=""
                   className="w-full h-full object-cover"
                 />
@@ -110,21 +95,24 @@ export default function PlayerBar() {
               </p>
             </div>
             <button
-              onClick={handleLike}
-              className={`bg-transparent border-0 text-base cursor-pointer p-1 transition-colors flex-shrink-0 ${liked ? "text-pink-400" : "text-zinc-600 hover:text-pink-400"}`}
+              onClick={toggleLike}
+              aria-label={liked ? "Unlike track" : "Like track"}
+              title={liked ? "Unlike track" : "Like track"}
+              className={`inline-flex items-center gap-1 bg-transparent border-0 cursor-pointer p-1 transition-colors flex-shrink-0 ${liked ? "text-pink-400" : "text-zinc-600 hover:text-pink-400"}`}
             >
-              <i className="ti ti-heart" />
+              <HeartIcon filled={liked} className="h-[18px] w-[18px]" />
+              <span className="text-[10px] font-semibold tabular-nums">{likesCount}</span>
             </button>
           </>
         ) : (
-          <p className="text-xs text-zinc-600">Double-click a track to play</p>
+          <p className="text-xs text-zinc-600">Select a track to play</p>
         )}
       </div>
 
       {/* Controls + seek */}
       <div className="flex flex-col items-center gap-2">
         <div className="flex items-center gap-5">
-          <button className="bg-transparent border-0 text-zinc-500 hover:text-zinc-200 text-lg cursor-pointer p-1">
+          <button onClick={toggleShuffle} title="Shuffle" className={`bg-transparent border-0 hover:text-zinc-200 text-lg cursor-pointer p-1 ${shuffle ? "text-emerald-400" : "text-zinc-500"}`}>
             <i className="ti ti-arrows-shuffle" />
           </button>
           <button
@@ -154,8 +142,8 @@ export default function PlayerBar() {
           >
             <i className="ti ti-player-skip-forward" />
           </button>
-          <button className="bg-transparent border-0 text-zinc-500 hover:text-zinc-200 text-lg cursor-pointer p-1">
-            <i className="ti ti-repeat" />
+          <button onClick={cycleRepeat} title={`Repeat: ${repeatMode}`} className={`relative bg-transparent border-0 hover:text-zinc-200 text-lg cursor-pointer p-1 ${repeatMode !== "off" ? "text-emerald-400" : "text-zinc-500"}`}>
+            <i className={`ti ${repeatMode === "one" ? "ti-repeat-once" : "ti-repeat"}`} />
           </button>
         </div>
 
@@ -193,7 +181,7 @@ export default function PlayerBar() {
       </div>
 
       {/* Volume */}
-      <div className="flex items-center gap-2.5 justify-end">
+      <div className="hidden md:flex items-center gap-2.5 justify-end">
         <button
           onClick={() => setVolume(volume > 0 ? 0 : 0.75)}
           className="bg-transparent border-0 text-zinc-500 hover:text-zinc-300 text-base cursor-pointer p-0.5 flex-shrink-0 transition-colors"

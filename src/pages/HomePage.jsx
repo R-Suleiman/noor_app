@@ -2,15 +2,16 @@ import { useEffect, useState } from "react";
 import TrackRow from "../components/TrackRow";
 import Avatar from "../components/Avatar";
 import { usePlayer } from "../context/PlayerContext";
-import { axiosClient, trackBg } from "../lib/api";
+import { axiosClient, mediaUrl, trackBg } from "../lib/api";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 
 export default function HomePage() {
-  const { current, playing, togglePlay, progress } = usePlayer();
+  const { current, playing, togglePlay, progress, play } = usePlayer();
+  useAuth();
   const [tracks, setTracks] = useState([]);
   const [artists, setArtists] = useState([]);
   const navigate = useNavigate()
-  const API_BASE_URL = "http://localhost:3001";
 
   useEffect(() => {
     axiosClient
@@ -27,13 +28,9 @@ export default function HomePage() {
       .catch(() => {});
   }, []);
 
-
   const handleStartListening = () => {
     if (tracks.length > 0) {
-      // Pass the complete trending collection directly to initialize global playback queue state
-      document.dispatchEvent(
-        new CustomEvent("play-first", { detail: { tracks } }),
-      );
+      play(tracks[0], tracks);
     }
   };
 
@@ -74,7 +71,7 @@ export default function HomePage() {
           </div>
           <div className="flex flex-col gap-1">
             {tracks.map((t, i) => (
-              <TrackRow key={t.id} track={t} index={i} trackList={tracks} />
+              <TrackRow key={t.id} track={t} index={i} liked={t.liked} trackList={tracks} />
             ))}
           </div>
         </div>
@@ -92,7 +89,7 @@ export default function HomePage() {
                 className="bg-zinc-900/40 hover:bg-zinc-800/40 border border-white/5 hover:border-white/10 rounded-2xl p-5 flex flex-col items-center text-center cursor-pointer transition-all duration-200 group"
               >
                 <div className="relative mb-4">
-                  <Avatar name={a.name} url={`${API_BASE_URL}${a.avatarUrl}`} size="xl" />
+                  <Avatar name={a.name} url={mediaUrl(a.avatarUrl)} size="xl" />
                   <div className="absolute inset-0 bg-black/20 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                     <i className="ti ti-eye text-white text-lg" />
                   </div>
@@ -137,14 +134,14 @@ export default function HomePage() {
               >
                 {current.album?.coverUrl ? (
                   <img
-                    src={current.album?.coverUrl}
+                    src={mediaUrl(current.album?.coverUrl)}
                     alt={current.title}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                   />
                 ) : 
                 current.coverUrl ? (
                   <img
-                    src={current.coverUrl}
+                    src={mediaUrl(current.coverUrl)}
                     alt={current.title}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                   />

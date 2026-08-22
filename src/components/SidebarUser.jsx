@@ -1,11 +1,11 @@
 import Avatar from "./Avatar";
 import { useAuth } from "../context/AuthContext";
 import { useNavigate } from "react-router-dom";
+import { mediaUrl } from "../lib/api";
 
 export default function SidebarUser() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const API_BASE_URL = "http://localhost:3001";
 
   if (!user)
     return (
@@ -24,7 +24,7 @@ export default function SidebarUser() {
         onClick={() => navigate(`/profile/${user.id}`)}
         className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-white/5 transition-colors cursor-pointer border-0 bg-transparent text-left"
       >
-        <Avatar name={user.displayName} url={`${API_BASE_URL}${user.avatarUrl}`} size="sm" />
+        <Avatar name={user.displayName} url={mediaUrl(user.avatarUrl)} size="sm" />
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium text-zinc-100 truncate">
             {user.displayName}

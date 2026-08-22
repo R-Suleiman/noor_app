@@ -3,8 +3,18 @@ import { useAuth } from "../context/AuthContext";
 import { axiosClient } from "../lib/api";
 import { useNavigate } from "react-router-dom";
 
+const ALLOWED_AUDIO_TYPES = new Set([
+  "audio/mpeg",
+  "audio/mp3",
+  "audio/wav",
+  "audio/x-wav",
+  "audio/flac",
+  "audio/x-flac",
+]);
+
 export default function UploadPage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   
   // Field Form Mapping States
   const [f, setF] = useState({
@@ -32,7 +42,6 @@ export default function UploadPage() {
   const [loadingAlbums, setLoadingAlbums] = useState(false);
 
   const coverInputRef = useRef(null);
-  const navigation = useNavigate()
 
   const set = (k, v) => setF((x) => ({ ...x, [k]: v }));
 
@@ -42,12 +51,16 @@ export default function UploadPage() {
       setLoadingAlbums(true);
       axiosClient.get(`/artists/${user.id}/albums`)
         .then((res) => {
-          setAlbumsList(res.data?.albums || res.albums || []);
+          setAlbumsList(res.albums || []);
         })
         .catch((err) => console.error("Error retrieving organizational folders:", err))
         .finally(() => setLoadingAlbums(false));
     }
   }, [user]);
+
+  useEffect(() => () => {
+    if (coverPreview?.startsWith("blob:")) URL.revokeObjectURL(coverPreview);
+  }, [coverPreview]);
 
   // Guard Clause Authentication Filter
   if (!user || user.role !== "ARTIST") {
@@ -66,18 +79,41 @@ export default function UploadPage() {
     );
   }
 
-  const handleAudioSelection = (e) => {
-    const file = e.target.files?.[0];
+  const loadAudioFile = (file) => {
     if (!file) return;
+    const hasAllowedExtension = /\.(mp3|wav|flac)$/i.test(file.name || "");
+    if (!ALLOWED_AUDIO_TYPES.has(file.type) && !hasAllowedExtension) {
+      setAudioFile(null);
+      setCalculatedDuration(0);
+      setError("Please select an MP3, WAV, or FLAC audio file.");
+      return;
+    }
 
     setAudioFile(file);
     setError("");
 
     const audioContext = new Audio();
-    audioContext.src = URL.createObjectURL(file);
+    const objectUrl = URL.createObjectURL(file);
+    audioContext.src = objectUrl;
     audioContext.onloadedmetadata = () => {
       setCalculatedDuration(Math.round(audioContext.duration));
+      URL.revokeObjectURL(objectUrl);
     };
+    audioContext.onerror = () => {
+      setCalculatedDuration(0);
+      URL.revokeObjectURL(objectUrl);
+      setError("The selected audio metadata could not be read, but you can still try uploading it.");
+    };
+  };
+
+  const handleAudioSelection = (e) => {
+    loadAudioFile(e.target.files?.[0]);
+  };
+
+  const handleAudioDrop = (event) => {
+    event.preventDefault();
+    if (busy) return;
+    loadAudioFile(event.dataTransfer.files?.[0]);
   };
 
   const handleCoverSelection = (e) => {
@@ -106,7 +142,7 @@ export default function UploadPage() {
         if (v && String(v).trim() !== "") fd.append(k, v);
       });
 
-      const res = await axiosClient.post("/upload/track", fd, {
+      const res = await axiosClient.post("/tracks", fd, {
         headers: { "Content-Type": "multipart/form-data" },
         onUploadProgress: (progressEvent) => {
           const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
@@ -137,6 +173,8 @@ export default function UploadPage() {
     setF({ title: "", titleAr: "", titleSw: "", genre: "QASIDAS", language: "ARABIC", albumId: "" });
   };
 
+  const canSubmit = Boolean(audioFile && f.title.trim()) && !busy;
+
   if (done) {
     return (
       <div className="p-8 flex flex-col items-center justify-center py-32 text-center max-w-sm mx-auto">
@@ -154,6 +192,9 @@ export default function UploadPage() {
           className="w-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold uppercase tracking-wider py-3 px-6 rounded-xl border-0 cursor-pointer transition-all shadow-md"
         >
           Publish another track
+        </button>
+        <button onClick={() => navigate(`/profile/${user.id}`)} className="w-full mt-2 bg-zinc-800 text-zinc-200 text-xs font-bold uppercase tracking-wider py-3 px-6 rounded-xl border-0 cursor-pointer">
+          View artist catalog
         </button>
       </div>
     );
@@ -215,7 +256,10 @@ export default function UploadPage() {
         </div>
 
         <div className="md:col-span-2 space-y-6">
-          <label className={`group block border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-all ${
+          <label
+            onDragOver={(event) => event.preventDefault()}
+            onDrop={handleAudioDrop}
+            className={`group block border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-all ${
             audioFile ? "border-emerald-500/30 bg-emerald-500/5" : "border-white/5 hover:border-emerald-500/40 hover:bg-emerald-500/5"
           }`}>
             <input 
@@ -243,9 +287,9 @@ export default function UploadPage() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {[
-              ["Global track title", "title", "sm:col-span-2", "e.g., Qamarun Sidnan Nabi"],
-              ["Arabic notation script title", "titleAr", "", "بالعربية (اختياري)"],
-              ["Swahili translation script title", "titleSw", "", "Kwa Kiswahili (hiari)"],
+              ["Global track title *", "title", "sm:col-span-2", "e.g., Qamarun Sidnan Nabi"],
+              ["Arabic notation (Optional)", "titleAr", "", "بالعربية (اختياري)"],
+              ["Swahili notation (Optional)", "titleSw", "", "Kwa Kiswahili (hiari)"],
             ].map(([label, key, spacing, placeholder]) => (
               <div key={key} className={`flex flex-col gap-1.5 ${spacing}`}>
                 <label className="text-[11px] tracking-wider uppercase font-bold text-zinc-500">{label}</label>
@@ -330,8 +374,9 @@ export default function UploadPage() {
           <div className="flex items-center gap-3 pt-2">
             <button
               onClick={submit}
-              disabled={busy || !audioFile}
-              className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-zinc-800 disabled:text-zinc-600 text-white text-xs font-bold uppercase tracking-wider py-3.5 px-6 rounded-xl border-0 cursor-pointer transition-colors shadow-md ml-auto"
+              disabled={!canSubmit}
+              title={!audioFile ? "Select an audio file first" : !f.title.trim() ? "Enter the global track title" : "Publish track"}
+              className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-zinc-800 disabled:text-zinc-600 disabled:cursor-not-allowed text-white text-xs font-bold uppercase tracking-wider py-3.5 px-6 rounded-xl border-0 cursor-pointer transition-colors shadow-md ml-auto"
             >
               <i className="ti ti-upload-cloud text-base" /> Commit & Publish Track
             </button>

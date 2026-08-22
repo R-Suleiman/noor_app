@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import TrackRow from "../components/TrackRow";
 import Avatar from "../components/Avatar";
-import { axiosClient } from "../lib/api";
+import { axiosClient, mediaUrl } from "../lib/api";
 import { useNavigate } from "react-router-dom";
 
 export default function SearchPage() {
@@ -9,7 +9,6 @@ export default function SearchPage() {
   const [results, setResults] = useState({ tracks: [], artists: [], albums: [] });
   const [activeTab, setActiveTab] = useState("all"); // all | tracks | artists | albums
   const [loading, setLoading] = useState(false);
-  const API_BASE_URL = "http://localhost:3001";
   const navigate = useNavigate()
 
   // Trigger search requests using an optimized fetch routine
@@ -148,10 +147,10 @@ export default function SearchPage() {
                     onClick={() => navigate(`/artist/${artist.id}`)}
                     className="bg-zinc-900/40 hover:bg-zinc-800/40 border border-white/5 rounded-2xl p-4 flex flex-col items-center text-center cursor-pointer transition-all duration-150"
                   >
-                    <Avatar name={artist.name} url={`${API_BASE_URL}${artist.user.avatarUrl}`} size="lg" className="mb-3 shadow-md" />
+                    <Avatar name={artist.name} url={mediaUrl(artist.user?.avatarUrl)} size="lg" className="mb-3 shadow-md" />
                     <p className="text-sm font-bold text-zinc-100 truncate w-full">{artist.name}</p>
                     <p className="text-xs text-zinc-500 mt-1">
-                      {artist._count?.tracks ?? 0} tracks · {artist.user?._count?.followers ?? 0} followers
+                      {artist._count?.tracks ?? 0} tracks · {artist._count?.followers ?? 0} followers
                     </p>
                   </div>
                 ))}
@@ -167,12 +166,12 @@ export default function SearchPage() {
                 {results.albums.map((album) => (
                   <div
                     key={album.id}
-                    onClick={() => navigate(`album/${album.id}`)}
+                    onClick={() => navigate(`/albums/${album.id}`)}
                     className="flex items-center gap-4 bg-zinc-900/30 hover:bg-zinc-800/40 border border-white/5 p-3 rounded-xl cursor-pointer transition-all group"
                   >
                     <div className="w-12 h-12 bg-zinc-800 rounded-lg flex-shrink-0 flex items-center justify-center overflow-hidden shadow border border-white/5">
                       {album.coverUrl ? (
-                        <img src={album.coverUrl} alt={album.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                        <img src={mediaUrl(album.coverUrl)} alt={album.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                       ) : (
                         <i className="ti ti-album text-zinc-600 text-lg" />
                       )}

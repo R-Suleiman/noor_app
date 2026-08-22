@@ -15,7 +15,9 @@ export function AuthProvider({ children }) {
     if (token && stored) {
       try {
         setUser(JSON.parse(stored));
-      } catch {}
+      } catch {
+        localStorage.removeItem("noor_user");
+      }
 
       axiosClient.get("/auth/me")
         .then((data) => {
@@ -52,14 +54,29 @@ export function AuthProvider({ children }) {
     return data.user;
   };
 
-  const logout = () => {
+  const logout = async ({ remote = true } = {}) => {
+    if (remote) {
+      try {
+        await axiosClient.post("/auth/logout");
+      } catch {
+        // Local session data is still cleared if the API is unavailable.
+      }
+    }
     localStorage.removeItem("noor_token");
     localStorage.removeItem("noor_user");
     setUser(null);
   };
 
+  const updateCurrentUser = (changes) => {
+    setUser((current) => {
+      const next = { ...current, ...changes };
+      localStorage.setItem("noor_user", JSON.stringify(next));
+      return next;
+    });
+  };
+
   return (
-    <AuthCtx.Provider value={{ user, loading, login, register, logout }}>
+    <AuthCtx.Provider value={{ user, loading, login, register, logout, updateCurrentUser }}>
       {children}
     </AuthCtx.Provider>
   );
