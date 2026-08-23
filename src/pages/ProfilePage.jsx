@@ -6,6 +6,7 @@ import { axiosClient, fmtNum, mediaUrl } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { useNavigate, useParams } from "react-router-dom";
 import { useDialog } from "../context/DialogContext";
+import VerifiedBadge from "../components/VerifiedBadge";
 
 export default function ProfilePage() {
   const { userId } = useParams();
@@ -484,9 +485,12 @@ export default function ProfilePage() {
                 />
               </div>
             ) : (
-              <h1 className="text-3xl font-bold text-white mb-1 tracking-tight truncate">
-                {profile.displayName}
-              </h1>
+              <div className="mb-1 flex items-center justify-center gap-2 sm:justify-start">
+                <h1 className="min-w-0 truncate text-3xl font-bold tracking-tight text-white">
+                  {profile.displayName}
+                </h1>
+                {artist?.isVerified && <VerifiedBadge className="shrink-0 text-sm font-semibold" />}
+              </div>
             )}
 
             <p className="text-sm font-medium text-zinc-400 mb-4 flex items-center justify-center sm:justify-start gap-2">

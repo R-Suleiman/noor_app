@@ -5,6 +5,7 @@ import { usePlayer } from "../context/PlayerContext";
 import { axiosClient, mediaUrl, trackBg } from "../lib/api";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import VerifiedBadge from "../components/VerifiedBadge";
 
 export default function HomePage() {
   const { current, playing, togglePlay, progress, play } = usePlayer();
@@ -94,9 +95,12 @@ export default function HomePage() {
                     <i className="ti ti-eye text-white text-lg" />
                   </div>
                 </div>
-                <p className="text-sm font-bold text-zinc-100 truncate w-full group-hover:text-emerald-400 transition-colors">
-                  {a.name}
-                </p>
+                <div className="flex w-full items-center justify-center gap-1">
+                  <p className="min-w-0 truncate text-sm font-bold text-zinc-100 transition-colors group-hover:text-emerald-400">
+                    {a.name}
+                  </p>
+                  {a.isVerified && <VerifiedBadge showLabel={false} className="shrink-0" />}
+                </div>
                 {a.isMadrassa && (
                   <span className="text-[10px] bg-yellow-500/10 text-yellow-400 border border-yellow-500/20 px-2 py-0.5 rounded-full mt-1.5 font-medium tracking-wide">
                     Madrassa

@@ -6,6 +6,7 @@ import Spinner from "../components/Spinner";
 import { axiosClient, GENRE_BG, mediaUrl } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { usePlayer } from "../context/PlayerContext";
+import VerifiedBadge from "../components/VerifiedBadge";
 
 export default function ArtistPage() {
   const { artistId } = useParams();
@@ -122,9 +123,7 @@ export default function ArtistPage() {
                 </span>
               )}
               {artist.isVerified && (
-                <span className="inline-flex items-center gap-0.5 text-xs bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded border border-blue-500/20 font-medium">
-                  <i className="ti ti-rosette-discount-check" /> Verified
-                </span>
+                <VerifiedBadge className="rounded border border-sky-500/20 bg-sky-500/10 px-2 py-0.5 text-xs font-semibold" />
               )}
             </div>
 

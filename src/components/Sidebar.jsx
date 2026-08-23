@@ -10,9 +10,12 @@ const NAV = [
 export default function Sidebar({ page, navigate, setShowAuth }) {
   return (
     <aside className="bg-zinc-900 border-r border-white/5 flex flex-col overflow-hidden" style={{gridRow:"1/2"}}>
-      <div className="px-6 py-7 border-b border-white/5 flex-shrink-0">
-        <p className="text-emerald-400 text-lg font-semibold tracking-wide" style={{fontFamily:"'Cinzel',serif"}}>نـور · Noor</p>
-        <p className="text-xs tracking-widest text-zinc-600 uppercase mt-0.5">Islamic Audio</p>
+      <div className="flex flex-shrink-0 items-center gap-3 border-b border-white/5 px-6 py-6">
+        <img src="/pwa-icon-192.png" alt="" className="h-11 w-11 rounded-xl" />
+        <div>
+          <p className="text-lg font-semibold tracking-wide text-emerald-400" style={{fontFamily:"'Cinzel',serif"}}>نـور · Noor</p>
+          <p className="mt-0.5 text-xs uppercase tracking-widest text-zinc-600">Islamic Audio</p>
+        </div>
       </div>
 
       <nav className="p-3 flex-1 overflow-y-auto">

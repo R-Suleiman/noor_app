@@ -103,6 +103,7 @@ export default function AuthPage() {
       <div className="w-full max-w-md">
 
         <div className="text-center mb-8">
+          <img src="/pwa-icon-192.png" alt="Noor" className="mx-auto mb-4 h-20 w-20 rounded-3xl shadow-xl shadow-purple-950/30" />
           <p className="text-emerald-400 text-3xl font-semibold tracking-wide mb-1" style={{ fontFamily: "'Cinzel',serif" }}>نـور · Noor</p>
           <p className="text-xs tracking-widest text-zinc-600 uppercase">Islamic Audio</p>
         </div>

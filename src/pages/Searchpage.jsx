@@ -3,6 +3,7 @@ import TrackRow from "../components/TrackRow";
 import Avatar from "../components/Avatar";
 import { axiosClient, mediaUrl } from "../lib/api";
 import { useNavigate } from "react-router-dom";
+import VerifiedBadge from "../components/VerifiedBadge";
 
 export default function SearchPage() {
   const [query, setQuery] = useState("");
@@ -148,7 +149,10 @@ export default function SearchPage() {
                     className="bg-zinc-900/40 hover:bg-zinc-800/40 border border-white/5 rounded-2xl p-4 flex flex-col items-center text-center cursor-pointer transition-all duration-150"
                   >
                     <Avatar name={artist.name} url={mediaUrl(artist.user?.avatarUrl)} size="lg" className="mb-3 shadow-md" />
-                    <p className="text-sm font-bold text-zinc-100 truncate w-full">{artist.name}</p>
+                    <div className="flex w-full items-center justify-center gap-1">
+                      <p className="min-w-0 truncate text-sm font-bold text-zinc-100">{artist.name}</p>
+                      {artist.isVerified && <VerifiedBadge showLabel={false} className="shrink-0" />}
+                    </div>
                     <p className="text-xs text-zinc-500 mt-1">
                       {artist._count?.tracks ?? 0} tracks · {artist._count?.followers ?? 0} followers
                     </p>

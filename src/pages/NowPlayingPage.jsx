@@ -5,6 +5,7 @@ import Spinner from "../components/Spinner";
 import { usePlayer } from "../context/PlayerContext";
 import { useTrackLike } from "../hooks/useTrackLike";
 import { fmtDur, mediaUrl, trackBg } from "../lib/api";
+import VerifiedBadge from "../components/VerifiedBadge";
 
 export default function NowPlayingPage() {
   const navigate = useNavigate();
@@ -79,9 +80,10 @@ export default function NowPlayingPage() {
               type="button"
               disabled={!artistId}
               onClick={() => artistId && navigate(`/artist/${artistId}`)}
-              className="mt-1 p-0 bg-transparent border-0 text-zinc-400 hover:text-emerald-400 disabled:hover:text-zinc-400 text-sm cursor-pointer disabled:cursor-default"
+              className="mt-1 inline-flex items-center gap-1 p-0 bg-transparent border-0 text-zinc-400 hover:text-emerald-400 disabled:hover:text-zinc-400 text-sm cursor-pointer disabled:cursor-default"
             >
               {artistName}
+              {artist?.isVerified && <VerifiedBadge showLabel={false} />}
             </button>
           </div>
           <span className="inline-flex items-center gap-1 text-xs text-zinc-500 pt-1">

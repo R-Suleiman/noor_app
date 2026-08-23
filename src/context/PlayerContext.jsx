@@ -29,7 +29,6 @@ export function PlayerProvider({ children }) {
   const currentTrackRef = useRef(null);
   const playbackSessionRef = useRef(null);
   const playRecordedRef = useRef(false);
-  const userRef = useRef(user);
   const advanceRef = useRef(null);
   const repeatRef = useRef("off");
   const restoreAttemptedRef = useRef(false);
@@ -52,10 +51,6 @@ export function PlayerProvider({ children }) {
   useEffect(() => {
     currentTrackRef.current = current;
   }, [current]);
-
-  useEffect(() => {
-    userRef.current = user;
-  }, [user]);
 
   const startSeekLoop = useCallback(() => {
     const tick = () => {
@@ -130,7 +125,7 @@ export function PlayerProvider({ children }) {
       const autoplay = options.autoplay !== false;
 
       if (howlRef.current && currentTrackRef.current?.id === track.id) {
-        if (howlRef.current.state() === "loaded") {
+        if (howlRef.current.state() === "loaded" && !howlRef.current.playing()) {
           howlRef.current.play();
         }
         return;
@@ -158,6 +153,7 @@ export function PlayerProvider({ children }) {
         },
 
         onload: () => {
+          if (howlRef.current !== h) return;
           const loadedDuration = h.duration() || Number(track.duration) || 0;
           const restoredPosition = Math.min(startAt, Math.max(loadedDuration - 0.25, 0));
           setDuration(loadedDuration);
@@ -170,6 +166,7 @@ export function PlayerProvider({ children }) {
         },
 
         onloaderror: (_id, err) => {
+          if (howlRef.current !== h) return;
           console.error(
             `[Howler Stream Error] failed path: "${track.title}" (${src}) — code:`,
             err,
@@ -179,23 +176,26 @@ export function PlayerProvider({ children }) {
         },
 
         onplayerror: (_id, err) => {
+          if (howlRef.current !== h) return;
           console.error(
             "[Howler Playback Interruption] interaction required:",
             err,
           );
           setStatus("paused");
-          h.once("unlock", () => h.play());
         },
 
         onplay: () => {
+          if (howlRef.current !== h) return;
           setStatus("playing");
           startSeekLoop();
         },
         onpause: () => {
+          if (howlRef.current !== h) return;
           setStatus("paused");
           stopSeekLoop();
         },
         onstop: () => {
+          if (howlRef.current !== h) return;
           setStatus("paused");
           stopSeekLoop();
           setProgress(0);
@@ -203,12 +203,14 @@ export function PlayerProvider({ children }) {
         },
 
         onend: () => {
+          if (howlRef.current !== h) return;
           stopSeekLoop();
           setProgress(100);
           setTimeout(() => advanceRef.current?.(true), 300);
         },
 
         onseek: () => {
+          if (howlRef.current !== h) return;
           const pos = typeof h.seek() === "number" ? h.seek() : 0;
           setElapsed(pos);
           setProgress(h.duration() > 0 ? (pos / h.duration()) * 100 : 0);
@@ -223,10 +225,15 @@ export function PlayerProvider({ children }) {
   );
 
   const pause = useCallback(() => howlRef.current?.pause(), []);
-  const resume = useCallback(() => howlRef.current?.play(), []);
+  const resume = useCallback(() => {
+    const h = howlRef.current;
+    if (!h || h.playing() || h.state() === "loading") return;
+    h.play();
+  }, []);
 
   const togglePlay = useCallback(() => {
     if (!howlRef.current || !currentTrackRef.current) return;
+    if (howlRef.current.state() === "loading") return;
     howlRef.current.playing() ? pause() : resume();
   }, [pause, resume]);
 
@@ -367,7 +374,10 @@ export function PlayerProvider({ children }) {
       setRepeatMode(["off", "all", "one"].includes(saved.repeatMode) ? saved.repeatMode : "off");
       play(saved.current, Array.isArray(saved.queue) ? saved.queue : [], {
         startAt: saved.position,
-        autoplay: saved.status === "playing" || saved.status === "loading",
+        // Browsers can reject autoplay after a reload. Restoring paused avoids
+        // a queued autoplay retry racing the user's Play tap and producing two
+        // simultaneous Howler sound IDs.
+        autoplay: false,
         sessionId: saved.playbackSessionId,
         playRecorded: saved.playRecorded,
       });

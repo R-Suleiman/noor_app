@@ -5,6 +5,7 @@ import Spinner from "./Spinner";
 import { useTrackLike } from "../hooks/useTrackLike";
 import HeartIcon from "./HeartIcon";
 import { useLocation, useNavigate } from "react-router-dom";
+import VerifiedBadge from "./VerifiedBadge";
 
 export default function PlayerBar() {
   const {
@@ -88,8 +89,9 @@ export default function PlayerBar() {
           <span className="block text-sm font-semibold text-zinc-100 truncate">
             {current.title}
           </span>
-          <span className="block text-xs text-zinc-400 truncate mt-0.5">
-            {current.artist?.name ?? current.artist ?? "Unknown artist"}
+          <span className="mt-0.5 flex min-w-0 items-center gap-1 text-xs text-zinc-400">
+            <span className="truncate">{current.artist?.name ?? current.artist ?? "Unknown artist"}</span>
+            {current.artist?.isVerified && <VerifiedBadge showLabel={false} className="shrink-0" />}
           </span>
         </span>
         <i className="ti ti-chevron-up text-zinc-500 text-lg" aria-hidden="true" />

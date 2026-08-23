@@ -4,6 +4,7 @@ import { axiosClient, mediaUrl, trackBg } from "../lib/api";
 import { useTrackLike } from "../hooks/useTrackLike";
 import { useDialog } from "../context/DialogContext";
 import HeartIcon from "./HeartIcon";
+import VerifiedBadge from "./VerifiedBadge";
 
 export default function TrackRow({
   track,
@@ -144,8 +145,9 @@ export default function TrackRow({
         >
           {track.title}
         </p>
-        <p className="text-xs text-zinc-400 truncate mt-0.5 hover:text-zinc-300 transition-colors">
-          {track.artist?.name ?? "Unknown Speaker"}
+        <p className="mt-0.5 flex min-w-0 items-center gap-1 text-xs text-zinc-400 transition-colors hover:text-zinc-300">
+          <span className="truncate">{track.artist?.name ?? "Unknown Speaker"}</span>
+          {track.artist?.isVerified && <VerifiedBadge showLabel={false} className="shrink-0" />}
         </p>
       </div>
 

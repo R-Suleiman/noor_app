@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Avatar from "../components/Avatar";
+import VerifiedBadge from "../components/VerifiedBadge";
 import Spinner from "../components/Spinner";
 import TrackRow from "../components/TrackRow";
 import { useAuth } from "../context/AuthContext";
@@ -146,7 +147,10 @@ export default function LibraryPage() {
               {data.map((artist) => (
                 <button key={artist.id} onClick={() => navigate(`/artist/${artist.id}`)} className="bg-zinc-900 border border-white/5 rounded-xl p-4 cursor-pointer text-zinc-100">
                   <Avatar name={artist.name} url={mediaUrl(artist.user?.avatarUrl)} size="xl" className="mx-auto mb-3" />
-                  <strong className="block truncate">{artist.name}</strong>
+                  <span className="flex items-center justify-center gap-1">
+                    <strong className="min-w-0 truncate">{artist.name}</strong>
+                    {artist.isVerified && <VerifiedBadge showLabel={false} className="shrink-0" />}
+                  </span>
                   <span className="text-xs text-zinc-500">{artist._count?.followers ?? 0} followers</span>
                 </button>
               ))}
