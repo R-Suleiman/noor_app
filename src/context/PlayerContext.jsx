@@ -12,6 +12,7 @@ import { useAuth } from "./AuthContext"; // 1. Import useAuth
 
 const PlayerCtx = createContext(null);
 export const usePlayer = () => useContext(PlayerCtx);
+const PLAYER_SESSION_KEY = "noor_player_session";
 
 const formatTime = (secs) => {
   if (isNaN(secs) || secs === null) return "0:00";
@@ -22,7 +23,7 @@ const formatTime = (secs) => {
 };
 
 export function PlayerProvider({ children }) {
-  const { user } = useAuth(); // 2. Access current authenticated user
+  const { user, loading: authLoading } = useAuth();
   const howlRef = useRef(null);
   const seekRafRef = useRef(null);
   const currentTrackRef = useRef(null);
@@ -31,6 +32,8 @@ export function PlayerProvider({ children }) {
   const userRef = useRef(user);
   const advanceRef = useRef(null);
   const repeatRef = useRef("off");
+  const restoreAttemptedRef = useRef(false);
+  const snapshotRef = useRef(null);
 
   const [current, setCurrent] = useState(null);
   const [queue, setQueue] = useState([]);
@@ -92,9 +95,10 @@ export function PlayerProvider({ children }) {
     }
   }, [stopSeekLoop]);
 
-  // 3. Reset player method
   const resetPlayer = useCallback(() => {
     destroyCurrent();
+    snapshotRef.current = null;
+    localStorage.removeItem(PLAYER_SESSION_KEY);
     setCurrent(null);
     setQueue([]);
     setStatus("idle");
@@ -103,19 +107,28 @@ export function PlayerProvider({ children }) {
     setDuration(0);
   }, [destroyCurrent]);
 
-  // 4. Automatically clear/reset state when user logs out or switches
-  const prevUserIdRef = useRef(user?.id);
+  // Clear another user's queue on an actual account switch, but do not treat
+  // the initial async auth restoration as a logout/login cycle.
+  const prevUserIdRef = useRef(undefined);
   useEffect(() => {
-    // If the user ID changes (or user logs out)
-    if (prevUserIdRef.current !== user?.id) {
-      resetPlayer();
-      prevUserIdRef.current = user?.id;
+    if (authLoading) return;
+    const userId = user?.id ?? null;
+    if (prevUserIdRef.current === undefined) {
+      prevUserIdRef.current = userId;
+      return;
     }
-  }, [user?.id, resetPlayer]);
+    if (prevUserIdRef.current !== userId) {
+      resetPlayer();
+      prevUserIdRef.current = userId;
+    }
+  }, [authLoading, user?.id, resetPlayer]);
 
   // ── core player control execution routine ──────────────────────────────────
   const play = useCallback(
-    (track, newQueue = []) => {
+    (track, newQueue = [], options = {}) => {
+      const startAt = Math.max(0, Number(options.startAt) || 0);
+      const autoplay = options.autoplay !== false;
+
       if (howlRef.current && currentTrackRef.current?.id === track.id) {
         if (howlRef.current.state() === "loaded") {
           howlRef.current.play();
@@ -130,8 +143,8 @@ export function PlayerProvider({ children }) {
       setElapsed(0);
       setDuration(0);
       setQueue(newQueue);
-      playbackSessionRef.current = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${track.id}`;
-      playRecordedRef.current = false;
+      playbackSessionRef.current = options.sessionId || globalThis.crypto?.randomUUID?.() || `${Date.now()}-${track.id}`;
+      playRecordedRef.current = Boolean(options.playRecorded);
 
       const src = `${API}/tracks/${track.id}/stream`;
 
@@ -145,10 +158,15 @@ export function PlayerProvider({ children }) {
         },
 
         onload: () => {
-          setDuration(h.duration());
-          setStatus("playing");
-          startSeekLoop();
-
+          const loadedDuration = h.duration() || Number(track.duration) || 0;
+          const restoredPosition = Math.min(startAt, Math.max(loadedDuration - 0.25, 0));
+          setDuration(loadedDuration);
+          if (restoredPosition > 0) {
+            h.seek(restoredPosition);
+            setElapsed(restoredPosition);
+            setProgress(loadedDuration > 0 ? (restoredPosition / loadedDuration) * 100 : 0);
+          }
+          if (!autoplay) setStatus("paused");
         },
 
         onloaderror: (_id, err) => {
@@ -165,6 +183,7 @@ export function PlayerProvider({ children }) {
             "[Howler Playback Interruption] interaction required:",
             err,
           );
+          setStatus("paused");
           h.once("unlock", () => h.play());
         },
 
@@ -197,7 +216,8 @@ export function PlayerProvider({ children }) {
       });
 
       howlRef.current = h;
-      h.play();
+      if (autoplay) h.play();
+      else h.load();
     },
     [destroyCurrent, startSeekLoop, stopSeekLoop, volume],
   );
@@ -275,7 +295,93 @@ export function PlayerProvider({ children }) {
     if (howlRef.current) howlRef.current.volume(volume);
   }, [volume]);
 
-  useEffect(() => () => destroyCurrent(), [destroyCurrent]);
+  // Keep enough information to rebuild the player after a refresh. The live
+  // position is checkpointed periodically and once more during pagehide.
+  useEffect(() => {
+    snapshotRef.current = current
+      ? {
+          current,
+          queue,
+          position: elapsed,
+          duration,
+          status,
+          shuffle,
+          repeatMode,
+          userId: user?.id ?? null,
+          playbackSessionId: playbackSessionRef.current,
+          playRecorded: playRecordedRef.current,
+          savedAt: Date.now(),
+        }
+      : null;
+  }, [current, queue, elapsed, duration, status, shuffle, repeatMode, user?.id]);
+
+  const persistSnapshot = useCallback(() => {
+    const snapshot = snapshotRef.current;
+    if (!snapshot?.current?.id) return;
+    try {
+      const livePosition = howlRef.current?.seek();
+      const checkpoint = {
+        ...snapshot,
+        position: typeof livePosition === "number" ? livePosition : snapshot.position,
+        status: howlRef.current
+          ? howlRef.current.playing()
+            ? "playing"
+            : howlRef.current.state() === "loading"
+              ? "loading"
+              : "paused"
+          : snapshot.status,
+        playbackSessionId: playbackSessionRef.current,
+        playRecorded: playRecordedRef.current,
+        savedAt: Date.now(),
+      };
+      localStorage.setItem(PLAYER_SESSION_KEY, JSON.stringify(checkpoint));
+    } catch {
+      // Playback must continue even if storage is unavailable or full.
+    }
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setInterval(persistSnapshot, 2000);
+    window.addEventListener("pagehide", persistSnapshot);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("pagehide", persistSnapshot);
+    };
+  }, [persistSnapshot]);
+
+  useEffect(() => {
+    if (authLoading || restoreAttemptedRef.current) return;
+    restoreAttemptedRef.current = true;
+
+    try {
+      const raw = localStorage.getItem(PLAYER_SESSION_KEY);
+      if (!raw) return;
+      const saved = JSON.parse(raw);
+      const activeUserId = user?.id ?? null;
+      if (!saved?.current?.id || (saved.userId ?? null) !== activeUserId) {
+        localStorage.removeItem(PLAYER_SESSION_KEY);
+        return;
+      }
+
+      setShuffle(Boolean(saved.shuffle));
+      setRepeatMode(["off", "all", "one"].includes(saved.repeatMode) ? saved.repeatMode : "off");
+      play(saved.current, Array.isArray(saved.queue) ? saved.queue : [], {
+        startAt: saved.position,
+        autoplay: saved.status === "playing" || saved.status === "loading",
+        sessionId: saved.playbackSessionId,
+        playRecorded: saved.playRecorded,
+      });
+    } catch {
+      localStorage.removeItem(PLAYER_SESSION_KEY);
+    }
+  }, [authLoading, user?.id, play]);
+
+  useEffect(() => () => {
+    // React Strict Mode performs a development-only setup/cleanup/setup pass.
+    // Allow that second setup to recreate a restored Howl instance.
+    restoreAttemptedRef.current = false;
+    destroyCurrent();
+  }, [destroyCurrent]);
 
   return (
     <PlayerCtx.Provider

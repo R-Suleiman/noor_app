@@ -113,7 +113,8 @@ export default function HomePage() {
       </div>
 
       {/* ─── RIGHT COLUMN: NOW PLAYING DETAIL SIDEBAR (Sticky Sidebar View) ─── */}
-      <div className="lg:col-span-1">
+      {/* hide in small screens */}
+      <div className="lg:col-span-1 hidden lg:flex flex-col gap-6">
         <div className="sticky top-8 bg-gradient-to-b from-zinc-900/60 to-zinc-900/20 border border-white/5 rounded-2xl p-6 shadow-xl min-h-[450px] flex flex-col justify-between overflow-hidden">
           {current ? (
             <div className="flex flex-col h-full animate-[fadeIn_0.3s_ease-out]">
@@ -157,7 +158,7 @@ export default function HomePage() {
                     className="w-14 h-14 bg-emerald-500 hover:bg-emerald-400 text-white rounded-full flex items-center justify-center border-0 cursor-pointer shadow-lg transform translate-y-2 group-hover:translate-y-0 transition-all duration-300"
                   >
                     <i
-                      className={`ti ${playing ? "ti-player-pause-filled" : "ti-player-play-filled"} text-xl`}
+                      className={`ti ${playing ? "ti-player-pause" : "ti-player-play"} text-xl`}
                     />
                   </button>
                 </div>

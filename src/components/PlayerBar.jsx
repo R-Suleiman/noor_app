@@ -4,6 +4,7 @@ import { trackBg, fmtDur, mediaUrl } from "../lib/api";
 import Spinner from "./Spinner";
 import { useTrackLike } from "../hooks/useTrackLike";
 import HeartIcon from "./HeartIcon";
+import { useLocation, useNavigate } from "react-router-dom";
 
 export default function PlayerBar() {
   const {
@@ -28,6 +29,8 @@ export default function PlayerBar() {
   const [dragging, setDragging] = useState(false);
   const [dragVal, setDragVal] = useState(0);
   const barRef = useRef(null);
+  const navigate = useNavigate();
+  const location = useLocation();
 
   // Seek bar: click or drag
   const getPct = (e) => {
@@ -57,60 +60,98 @@ export default function PlayerBar() {
 
   const displayPct = dragging ? dragVal : progress;
 
+  if (!current) return null;
+
   return (
     <div
-      className="row-start-3 md:row-start-2 md:col-span-2 bg-zinc-900 border-t border-white/5 grid grid-cols-1 sm:grid-cols-[minmax(160px,280px)_1fr] md:grid-cols-[280px_1fr_200px] items-center px-3 sm:px-6 gap-3 sm:gap-6 h-20"
+      className="relative row-start-3 md:row-start-2 md:col-span-2 bg-zinc-900 border-t border-white/5 flex sm:grid sm:grid-cols-[minmax(160px,280px)_1fr] md:grid-cols-[280px_1fr_200px] items-center px-3 sm:px-6 gap-3 sm:gap-6 h-20"
     >
+      {/* Compact mobile player. The whole metadata area opens Now Playing. */}
+      <button
+        type="button"
+        onClick={() => navigate("/now-playing", { state: { from: `${location.pathname}${location.search}` } })}
+        className="sm:hidden min-w-0 flex-1 flex items-center gap-3 bg-transparent border-0 text-left p-0 cursor-pointer"
+        aria-label={`Open Now Playing for ${current.title}`}
+      >
+        <div className={`w-12 h-12 rounded-lg overflow-hidden flex items-center justify-center flex-shrink-0 ${trackBg(current)}`}>
+          {current.album?.coverUrl || current.coverUrl ? (
+            <img
+              src={mediaUrl(current.album?.coverUrl || current.coverUrl)}
+              alt=""
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <i className="ti ti-music text-white/60" />
+          )}
+        </div>
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-semibold text-zinc-100 truncate">
+            {current.title}
+          </span>
+          <span className="block text-xs text-zinc-400 truncate mt-0.5">
+            {current.artist?.name ?? current.artist ?? "Unknown artist"}
+          </span>
+        </span>
+        <i className="ti ti-chevron-up text-zinc-500 text-lg" aria-hidden="true" />
+      </button>
+
+      <button
+        type="button"
+        onClick={togglePlay}
+        aria-label={playing ? "Pause" : "Play"}
+        className="sm:hidden w-11 h-11 rounded-full bg-emerald-600 hover:bg-emerald-500 flex items-center justify-center text-white border-0 cursor-pointer flex-shrink-0"
+      >
+        {buffering ? <Spinner sm /> : <i className={`ti ${playing ? "ti-player-pause" : "ti-player-play"}`} />}
+      </button>
+
+      <div className="sm:hidden absolute left-0 right-0 bottom-0 h-0.5 bg-zinc-800">
+        <div className="h-full bg-emerald-500" style={{ width: `${displayPct}%` }} />
+      </div>
+
       {/* Track info */}
       <div className="hidden sm:flex items-center gap-3 min-w-0">
-        {current ? (
-          <>
-            <div
-              className={`w-11 h-11 rounded-md flex items-center justify-center flex-shrink-0 ${trackBg(current)}`}
-            >
-              {buffering ? (
-                <Spinner sm />
-              ) : current.album?.coverUrl ? (
-                <img
-                  src={mediaUrl(current.album?.coverUrl)}
-                  alt=""
-                  className="w-full h-full object-cover"
-                />
-              ) : current.coverUrl ? (
-                <img
-                  src={mediaUrl(current.coverUrl)}
-                  alt=""
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <i className="ti ti-music text-white/60 text-sm" />
-              )}
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-zinc-100 truncate">
-                {current.title}
-              </p>
-              <p className="text-xs text-zinc-400 truncate">
-                {current.artist?.name ?? current.artist}
-              </p>
-            </div>
-            <button
-              onClick={toggleLike}
-              aria-label={liked ? "Unlike track" : "Like track"}
-              title={liked ? "Unlike track" : "Like track"}
-              className={`inline-flex items-center gap-1 bg-transparent border-0 cursor-pointer p-1 transition-colors flex-shrink-0 ${liked ? "text-pink-400" : "text-zinc-600 hover:text-pink-400"}`}
-            >
-              <HeartIcon filled={liked} className="h-[18px] w-[18px]" />
-              <span className="text-[10px] font-semibold tabular-nums">{likesCount}</span>
-            </button>
-          </>
-        ) : (
-          <p className="text-xs text-zinc-600">Select a track to play</p>
-        )}
+        <div
+          className={`w-11 h-11 rounded-md flex items-center justify-center flex-shrink-0 ${trackBg(current)}`}
+        >
+          {buffering ? (
+            <Spinner sm />
+          ) : current.album?.coverUrl ? (
+            <img
+              src={mediaUrl(current.album?.coverUrl)}
+              alt=""
+              className="w-full h-full object-cover"
+            />
+          ) : current.coverUrl ? (
+            <img
+              src={mediaUrl(current.coverUrl)}
+              alt=""
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <i className="ti ti-music text-white/60 text-sm" />
+          )}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold text-zinc-100 truncate">
+            {current.title}
+          </p>
+          <p className="text-xs text-zinc-400 truncate">
+            {current.artist?.name ?? current.artist}
+          </p>
+        </div>
+        <button
+          onClick={toggleLike}
+          aria-label={liked ? "Unlike track" : "Like track"}
+          title={liked ? "Unlike track" : "Like track"}
+          className={`inline-flex items-center gap-1 bg-transparent border-0 cursor-pointer p-1 transition-colors flex-shrink-0 ${liked ? "text-pink-400" : "text-zinc-600 hover:text-pink-400"}`}
+        >
+          <HeartIcon filled={liked} className="h-[18px] w-[18px]" />
+          <span className="text-[10px] font-semibold tabular-nums">{likesCount}</span>
+        </button>
       </div>
 
       {/* Controls + seek */}
-      <div className="flex flex-col items-center gap-2">
+      <div className="hidden sm:flex flex-col items-center gap-2">
         <div className="flex items-center gap-5">
           <button onClick={toggleShuffle} title="Shuffle" className={`bg-transparent border-0 hover:text-zinc-200 text-lg cursor-pointer p-1 ${shuffle ? "text-emerald-400" : "text-zinc-500"}`}>
             <i className="ti ti-arrows-shuffle" />
@@ -136,7 +177,7 @@ export default function PlayerBar() {
             )}
           </button>
           <button
-            onClick={playNext}
+            onClick={() => playNext()}
             className="bg-transparent border-0 text-zinc-500 hover:text-zinc-200 text-lg cursor-pointer p-1 disabled:opacity-40"
             disabled={!current}
           >

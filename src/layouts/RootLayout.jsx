@@ -1,7 +1,8 @@
-import { Outlet, NavLink, useNavigate } from "react-router-dom";
+import { Outlet, NavLink, useLocation, useNavigate } from "react-router-dom";
 import PlayerBar from "../components/PlayerBar";
 import SidebarUser from "../components/SidebarUser";
 import { useAuth } from "../context/AuthContext";
+import { usePlayer } from "../context/PlayerContext";
 
 const NAV = [
   { path: "/",        label: "Home",       icon: "ti-home"         },
@@ -14,7 +15,10 @@ const NAV = [
 
 export default function RootLayout() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
+  const { current } = usePlayer();
+  const showPlayerBar = Boolean(current) && location.pathname !== "/now-playing";
   const visibleNav = NAV.filter((item) => {
     if (item.path === "/upload") return user?.role === "ARTIST";
     if (item.path === "/admin") return user?.role === "ADMIN";
@@ -23,7 +27,7 @@ export default function RootLayout() {
   });
 
   return (
-    <div className="grid grid-cols-1 grid-rows-[56px_minmax(0,1fr)_80px] md:grid-cols-[240px_minmax(0,1fr)] md:grid-rows-[minmax(0,1fr)_80px] bg-zinc-950 text-zinc-100 overflow-hidden h-screen"
+    <div className={`grid grid-cols-1 md:grid-cols-[240px_minmax(0,1fr)] bg-zinc-950 text-zinc-100 overflow-hidden h-screen ${showPlayerBar ? "grid-rows-[64px_minmax(0,1fr)_80px] md:grid-rows-[minmax(0,1fr)_80px]" : "grid-rows-[64px_minmax(0,1fr)] md:grid-rows-[minmax(0,1fr)]"}`}
       style={{ fontFamily: "'Nunito Sans',system-ui,sans-serif" }}>
 
       <aside className="hidden md:flex bg-zinc-900 border-r border-white/5 flex-col overflow-hidden row-start-1">
@@ -54,20 +58,24 @@ export default function RootLayout() {
         <SidebarUser navigate={navigate} />
       </aside>
 
-      <header className="md:hidden row-start-1 flex items-center gap-1 px-2 bg-zinc-900 border-b border-white/5 overflow-x-auto">
+      <header className="md:hidden row-start-1 flex items-center gap-0.5 px-1 bg-zinc-900 border-b border-white/5 overflow-x-auto">
         {visibleNav.map((item) => (
-          <NavLink key={item.path} to={item.path} aria-label={item.label} className={({ isActive }) => `w-10 h-10 rounded-lg flex items-center justify-center ${isActive ? "text-emerald-400 bg-emerald-500/10" : "text-zinc-500"}`}>
-            <i className={`ti ${item.icon}`} />
+          <NavLink key={item.path} to={item.path} aria-label={item.label} className={({ isActive }) => `h-14 min-w-12 px-1 rounded-lg flex flex-col items-center justify-center gap-0.5 no-underline ${isActive ? "text-emerald-400 bg-emerald-500/10" : "text-zinc-500"}`}>
+            <i className={`ti ${item.icon} text-lg`} />
+            <span className="text-[9px] leading-none whitespace-nowrap">{item.label}</span>
           </NavLink>
         ))}
-        <button onClick={() => navigate(user ? `/profile/${user.id}` : "/auth")} className="ml-auto w-10 h-10 rounded-lg bg-transparent border-0 text-zinc-400"><i className={`ti ${user ? "ti-user" : "ti-login"}`} /></button>
+        <button onClick={() => navigate(user ? `/profile/${user.id}` : "/auth")} aria-label={user ? "Profile" : "Sign in"} className="ml-auto h-14 min-w-12 px-1 rounded-lg bg-transparent border-0 text-zinc-400 flex flex-col items-center justify-center gap-0.5 cursor-pointer">
+          <i className={`ti ${user ? "ti-user" : "ti-login"} text-lg`} />
+          <span className="text-[9px] leading-none whitespace-nowrap">{user ? "Profile" : "Sign in"}</span>
+        </button>
       </header>
 
       <main className="overflow-y-auto row-start-2 md:row-start-1 md:col-start-2">
         <Outlet />
       </main>
 
-      <PlayerBar />
+      {showPlayerBar && <PlayerBar />}
     </div>
   );
 }

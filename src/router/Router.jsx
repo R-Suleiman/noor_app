@@ -13,6 +13,7 @@ import SearchPage from "../pages/Searchpage";
 import AlbumPage from "../pages/AlbumPage";
 import PlaylistPage from "../pages/PlaylistPage";
 import AdminPage from "../pages/AdminPage";
+import NowPlayingPage from "../pages/NowPlayingPage";
 
 const Router = () => [
   <BrowserRouter>
@@ -26,6 +27,7 @@ const Router = () => [
         <Route path="/artist/:artistId" element={<ArtistPage />} />
         <Route path="/profile/:userId" element={<ProfilePage />} />
         <Route path="/albums/:albumId" element={<AlbumPage />} />
+        <Route path="/now-playing" element={<NowPlayingPage />} />
 
         {/* ─── PERSONAL LIBRARY ROUTES ─── */}
         <Route element={<ProtectedRoute />}>
