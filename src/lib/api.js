@@ -26,7 +26,18 @@ export const fmtDur = s => {
   const secs = Math.floor(s % 60);
   return `${mins}:${String(secs).padStart(2, "0")}`;
 };
-export const fmtNum = n => n >= 1000 ? `${(n/1000).toFixed(1)}k` : String(n ?? 0);
+export const fmtNum = (value) => {
+  const number = Number(value) || 0;
+  const units = [
+    { threshold: 1_000_000_000, suffix: "B" },
+    { threshold: 1_000_000, suffix: "M" },
+    { threshold: 1_000, suffix: "k" },
+  ];
+  const unit = units.find(({ threshold }) => Math.abs(number) >= threshold);
+  if (!unit) return String(number);
+  const shortened = number / unit.threshold;
+  return `${Number(shortened.toFixed(shortened >= 100 ? 0 : 1))}${unit.suffix}`;
+};
 
 // ─── Exported Axios Instance ─────────────────────────────────────────────────
 export const axiosClient = axios.create({

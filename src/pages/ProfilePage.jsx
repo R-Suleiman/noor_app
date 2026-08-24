@@ -387,6 +387,7 @@ export default function ProfilePage() {
   const counts = profile._count ?? {};
 
   const likedCollection = profile.likes || [];
+  const likedTracks = likedCollection.map((item) => item?.track || item).filter((track) => track?.id);
   const playlistCollection = profile.playlists || [];
   const publishedTracks = artist?.tracks || profile.tracks || [];
 
@@ -958,10 +959,9 @@ export default function ProfilePage() {
 
               {activeTab === "liked" && (
                 <>
-                  {likedCollection.map((item, i) => {
-                    const rawTrack = item?.track || item;
+                  {likedTracks.map((rawTrack, i) => {
                     return rawTrack?.id ? (
-                      <TrackRow key={rawTrack.id} track={rawTrack} index={i} />
+                      <TrackRow key={rawTrack.id} track={rawTrack} index={i} trackList={likedTracks} />
                     ) : null;
                   })}
                   {likedCollection.length === 0 && (

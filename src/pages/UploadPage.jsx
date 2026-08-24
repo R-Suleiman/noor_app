@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import { axiosClient } from "../lib/api";
 import { useNavigate } from "react-router-dom";
+import { MAQAM_OPTIONS } from "../constants/trackMetadata";
 
 const ALLOWED_AUDIO_TYPES = new Set([
   "audio/mpeg",
@@ -23,6 +24,7 @@ export default function UploadPage() {
     titleSw: "",
     genre: "QASIDAS",
     language: "ARABIC",
+    maqamat: [],
     albumId: "" // Clean relational reference assignment mapping
   });
   
@@ -44,6 +46,12 @@ export default function UploadPage() {
   const coverInputRef = useRef(null);
 
   const set = (k, v) => setF((x) => ({ ...x, [k]: v }));
+  const toggleMaqam = (value) => setF((current) => ({
+    ...current,
+    maqamat: current.maqamat.includes(value)
+      ? current.maqamat.filter((maqam) => maqam !== value)
+      : [...current.maqamat, value],
+  }));
 
   // Load Album List Contexts dynamically
   useEffect(() => {
@@ -139,6 +147,10 @@ export default function UploadPage() {
       fd.append("duration", calculatedDuration.toString());
 
       Object.entries(f).forEach(([k, v]) => {
+        if (k === "maqamat") {
+          if (v.length) fd.append(k, JSON.stringify(v));
+          return;
+        }
         if (v && String(v).trim() !== "") fd.append(k, v);
       });
 
@@ -170,7 +182,7 @@ export default function UploadPage() {
     setCoverPreview(null);
     setCalculatedDuration(0);
     setProgress(0);
-    setF({ title: "", titleAr: "", titleSw: "", genre: "QASIDAS", language: "ARABIC", albumId: "" });
+    setF({ title: "", titleAr: "", titleSw: "", genre: "QASIDAS", language: "ARABIC", maqamat: [], albumId: "" });
   };
 
   const canSubmit = Boolean(audioFile && f.title.trim()) && !busy;
@@ -348,6 +360,30 @@ export default function UploadPage() {
                 ))}
               </select>
             </div>
+
+            <fieldset className="sm:col-span-2" disabled={busy}>
+              <legend className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">
+                Maqām / sound modes <span className="normal-case tracking-normal text-zinc-600">(Optional, choose all that apply)</span>
+              </legend>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {MAQAM_OPTIONS.map((maqam) => {
+                  const selected = f.maqamat.includes(maqam.value);
+                  return (
+                    <button
+                      key={maqam.value}
+                      type="button"
+                      aria-pressed={selected}
+                      onClick={() => toggleMaqam(maqam.value)}
+                      className={`rounded-full border px-3.5 py-2 text-xs font-semibold transition-colors ${selected ? "border-purple-500 bg-purple-500/15 text-purple-300" : "border-white/5 bg-zinc-900/60 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200"}`}
+                    >
+                      {selected && <i className="ti ti-check mr-1" />}
+                      {maqam.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="mt-2 text-xs leading-5 text-zinc-600">Leave this empty when the maqām is unknown or does not apply.</p>
+            </fieldset>
           </div>
 
           {busy && (

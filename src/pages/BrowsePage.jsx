@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import TrackRow from "../components/TrackRow";
 import { axiosClient } from "../lib/api";
+import { MAQAM_OPTIONS } from "../constants/trackMetadata";
 
 const GENRES = ["All", "Qasidas", "Nasheeds", "Duff", "Instrumental", "Madrassa"];
 const LANGUAGES = [
@@ -19,6 +20,7 @@ export default function BrowsePage() {
   const [genre, setGenre] = useState("All");
   const [language, setLanguage] = useState("All");
   const [sort, setSort] = useState("recent");
+  const [maqamat, setMaqamat] = useState([]);
   
   const [tracks, setTracks] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -32,6 +34,7 @@ export default function BrowsePage() {
     if (genre !== "All") params.append("genre", genre.toUpperCase());
     if (language !== "All") params.append("language", language);
     if (sort !== "recent") params.append("sort", sort);
+    if (maqamat.length) params.append("maqamat", maqamat.join(","));
 
     axiosClient.get(`/tracks?${params.toString()}`)
       .then((res) => {
@@ -50,7 +53,13 @@ export default function BrowsePage() {
     return () => {
       isMounted = false;
     };
-  }, [genre, language, sort]);
+  }, [genre, language, sort, maqamat]);
+
+  const toggleMaqam = (value) => {
+    setMaqamat((current) => current.includes(value)
+      ? current.filter((maqam) => maqam !== value)
+      : [...current, value]);
+  };
 
   return (
     <div className="p-8 max-w-6xl mx-auto min-h-screen">
@@ -90,6 +99,32 @@ export default function BrowsePage() {
             })}
           </div>
         </div>
+
+        <fieldset className="border-t border-zinc-800/50 pt-4">
+          <legend className="text-[11px] font-bold uppercase tracking-widest text-zinc-500">Maqām / sound mode</legend>
+          <p className="mt-1 text-xs text-zinc-600">Select one or more. Results must contain every selected maqām.</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {MAQAM_OPTIONS.map((maqam) => {
+              const selected = maqamat.includes(maqam.value);
+              return (
+                <button
+                  key={maqam.value}
+                  type="button"
+                  aria-pressed={selected}
+                  onClick={() => toggleMaqam(maqam.value)}
+                  className={`rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-colors ${selected ? "border-purple-500 bg-purple-500/15 text-purple-300" : "border-white/5 bg-zinc-800/40 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200"}`}
+                >
+                  {maqam.label}
+                </button>
+              );
+            })}
+            {maqamat.length > 0 && (
+              <button type="button" onClick={() => setMaqamat([])} className="rounded-full border border-white/5 bg-transparent px-3 py-1.5 text-xs font-semibold text-zinc-500 hover:text-zinc-300">
+                Clear
+              </button>
+            )}
+          </div>
+        </fieldset>
 
         {/* Dropdown Filters Sub-grid Row */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-zinc-800/50 pt-4">
@@ -173,7 +208,7 @@ export default function BrowsePage() {
           </div>
           <h3 className="text-zinc-200 font-semibold text-sm">No Tracks Match Filters</h3>
           <p className="text-zinc-500 text-xs max-w-sm mt-1 px-4 leading-normal">
-            We couldn't find matches for {genre !== "All" ? `"${genre}"` : ""} tracks in the chosen language layout. Try adjusting your combinations.
+            We couldn't find tracks matching all the selected genre, language, and maqām filters. Try removing one of the selections.
           </p>
         </div>
       )}

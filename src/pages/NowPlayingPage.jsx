@@ -4,8 +4,9 @@ import HeartIcon from "../components/HeartIcon";
 import Spinner from "../components/Spinner";
 import { usePlayer } from "../context/PlayerContext";
 import { useTrackLike } from "../hooks/useTrackLike";
-import { fmtDur, mediaUrl, trackBg } from "../lib/api";
+import { fmtDur, fmtNum, mediaUrl, trackBg } from "../lib/api";
 import VerifiedBadge from "../components/VerifiedBadge";
+import { maqamLabel } from "../constants/trackMetadata";
 
 export default function NowPlayingPage() {
   const navigate = useNavigate();
@@ -27,7 +28,7 @@ export default function NowPlayingPage() {
     toggleShuffle,
     cycleRepeat,
   } = usePlayer();
-  const { liked, likesCount, toggleLike } = useTrackLike(current);
+  const { liked, likesCount, toggleLike } = useTrackLike(current, { refresh: true });
 
   if (!current) {
     return (
@@ -86,10 +87,28 @@ export default function NowPlayingPage() {
               {artist?.isVerified && <VerifiedBadge showLabel={false} />}
             </button>
           </div>
-          <span className="inline-flex items-center gap-1 text-xs text-zinc-500 pt-1">
-            <HeartIcon filled={liked} className="w-3.5 h-3.5" /> {likesCount}
-          </span>
+          <div className="flex shrink-0 items-center gap-3 pt-1 text-xs text-zinc-500">
+            <span className="inline-flex items-center gap-1" title={`${current.playCount ?? 0} plays`}>
+              <i className="ti ti-headphones" /> {fmtNum(current.playCount)}
+            </span>
+            <span className="inline-flex items-center gap-1" title={`${likesCount} likes`}>
+              <HeartIcon filled={liked} className="w-3.5 h-3.5" /> {fmtNum(likesCount)}
+            </span>
+          </div>
         </section>
+
+        {current.maqamat?.length > 0 && (
+          <section className="mt-4">
+            <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-600">Maqām / sound modes</p>
+            <div className="flex flex-wrap gap-2">
+              {current.maqamat.map((maqam) => (
+                <span key={maqam} className="rounded-full border border-purple-500/20 bg-purple-500/10 px-3 py-1 text-xs font-semibold text-purple-300">
+                  {maqamLabel(maqam)}
+                </span>
+              ))}
+            </div>
+          </section>
+        )}
 
         <section className="mt-6">
           <input

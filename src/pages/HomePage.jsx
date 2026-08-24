@@ -7,11 +7,39 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import VerifiedBadge from "../components/VerifiedBadge";
 
+function TrackSkeletons() {
+  return Array.from({ length: 5 }, (_, index) => (
+    <div key={index} className="grid animate-pulse grid-cols-[32px_48px_minmax(0,1fr)_64px] items-center gap-2 rounded-xl px-2 py-2 md:grid-cols-[32px_48px_minmax(0,1fr)_120px_80px_64px] md:gap-4 md:px-4">
+      <div className="mx-auto h-3 w-3 rounded bg-zinc-800" />
+      <div className="h-12 w-12 rounded-lg bg-zinc-800" />
+      <div className="min-w-0 space-y-2">
+        <div className="h-3 w-2/3 rounded bg-zinc-800" />
+        <div className="h-2.5 w-1/3 rounded bg-zinc-800/70" />
+      </div>
+      <div className="h-6 rounded bg-zinc-800/70" />
+      <div className="hidden h-3 rounded bg-zinc-800/70 md:block" />
+      <div className="hidden h-5 rounded bg-zinc-800/70 md:block" />
+    </div>
+  ));
+}
+
+function ArtistSkeletons() {
+  return Array.from({ length: 4 }, (_, index) => (
+    <div key={index} className="animate-pulse rounded-2xl border border-white/5 bg-zinc-900/40 p-5 text-center">
+      <div className="mx-auto mb-4 h-20 w-20 rounded-full bg-zinc-800" />
+      <div className="mx-auto h-3 w-2/3 rounded bg-zinc-800" />
+      <div className="mx-auto mt-3 h-2.5 w-1/2 rounded bg-zinc-800/70" />
+    </div>
+  ));
+}
+
 export default function HomePage() {
-  const { current, playing, togglePlay, progress, play } = usePlayer();
+  const { current, playing, buffering, togglePlay, progress, play } = usePlayer();
   useAuth();
   const [tracks, setTracks] = useState([]);
   const [artists, setArtists] = useState([]);
+  const [loadingTracks, setLoadingTracks] = useState(true);
+  const [loadingArtists, setLoadingArtists] = useState(true);
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -21,45 +49,69 @@ export default function HomePage() {
         setTracks(res.tracks || [])
       }
     )
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setLoadingTracks(false));
 
     axiosClient
       .get("/artists")
       .then((res) => setArtists(res.artists || []))
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setLoadingArtists(false));
   }, []);
 
-  const handleStartListening = () => {
-    if (tracks.length > 0) {
-      play(tracks[0], tracks);
+  const handleBannerPlayback = () => {
+    if (current) {
+      togglePlay();
+      return;
     }
+    if (tracks.length > 0) play(tracks[0], tracks);
   };
 
+  const bannerButtonLabel = buffering
+    ? "Loading audio"
+    : current
+      ? playing
+        ? "Pause listening"
+        : "Resume listening"
+      : "Start listening";
+
   return (
-    <div className="p-8 max-w-[1400px] mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8">
+    <div className="mx-auto grid max-w-[1400px] grid-cols-1 gap-8 p-4 sm:p-8 lg:grid-cols-3">
       {/* ─── LEFT COLUMN: DISCOVERY FLOW (Occupies 2 spans out of 3) ───────── */}
       <div className="lg:col-span-2">
         {/* Banner Area */}
-        <div className="relative rounded-2xl bg-gradient-to-br from-zinc-800/80 to-zinc-900/50 border border-white/5 p-8 mb-10 overflow-hidden shadow-xl">
+        <div className="relative mb-10 overflow-hidden rounded-2xl border border-white/5 bg-gradient-to-br from-zinc-800/80 to-zinc-900/50 p-5 shadow-xl sm:p-8">
           <div className="absolute -top-16 -right-16 w-56 h-56 rounded-full bg-emerald-500/10 pointer-events-none filter blur-xl" />
           <div className="absolute -bottom-10 right-32 w-36 h-36 rounded-full bg-yellow-500/5 pointer-events-none filter blur-xl" />
+
+          <div className="relative z-10 mb-5 flex items-center gap-3 sm:hidden">
+            <img src="/pwa-icon-192.png" alt="" className="h-11 w-11 rounded-xl shadow-lg shadow-black/30" />
+            <div>
+              <p className="text-base font-semibold tracking-wide text-zinc-100" style={{ fontFamily: "'Cinzel', serif" }}>نـور · Noor</p>
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-400">Islamic Audio</p>
+            </div>
+          </div>
 
           <p className="text-xs font-semibold tracking-widest uppercase text-yellow-400/80 mb-2">
             Assalamu Alaykum
           </p>
           <h1
-            className="text-4xl font-bold text-zinc-100 leading-snug mb-5 relative z-10"
+            className="relative z-10 mb-5 text-3xl font-bold leading-snug text-zinc-100 sm:text-4xl"
             style={{ fontFamily: "'Cinzel', serif" }}
           >
-            Discover the voice
+            Listen. Reflect.
             <br />
-            of devotion
+            Feel connected.
           </h1>
           <button
-            onClick={handleStartListening}
-            className="relative z-10 inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold px-6 py-3 rounded-xl transition-all shadow-lg hover:scale-[1.02] active:scale-[0.98] border-0 cursor-pointer"
+            type="button"
+            onClick={handleBannerPlayback}
+            disabled={buffering || (!current && tracks.length === 0)}
+            aria-label={bannerButtonLabel}
+            className="relative z-10 inline-flex items-center gap-2 rounded-xl border-0 bg-emerald-600 px-6 py-3 text-sm font-semibold text-white shadow-lg transition-all hover:scale-[1.02] hover:bg-emerald-500 active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400 disabled:hover:scale-100"
           >
-            <i className="ti ti-player-play-filled" /> Start listening
+            <i className={`ti ${buffering ? "ti-loader-2 animate-spin" : playing && current ? "ti-player-pause-filled" : "ti-player-play-filled"}`} />
+            {bannerButtonLabel}
           </button>
         </div>
 
@@ -71,9 +123,11 @@ export default function HomePage() {
             </p>
           </div>
           <div className="flex flex-col gap-1">
-            {tracks.map((t, i) => (
-              <TrackRow key={t.id} track={t} index={i} liked={t.liked} trackList={tracks} />
-            ))}
+            {loadingTracks
+              ? <TrackSkeletons />
+              : tracks.map((t, i) => (
+                  <TrackRow key={t.id} track={t} index={i} liked={t.liked} trackList={tracks} />
+                ))}
           </div>
         </div>
 
@@ -83,7 +137,7 @@ export default function HomePage() {
             Featured artists
           </p>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-            {artists.map((a) => (
+            {loadingArtists ? <ArtistSkeletons /> : artists.map((a) => (
               <div
                 key={a.id}
                 onClick={() => navigate(`/artist/${a.id}`)}

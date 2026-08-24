@@ -64,9 +64,16 @@ export function PlayerProvider({ children }) {
       const threshold = Math.min(30, Math.max(5, dur * 0.5));
       if (!playRecordedRef.current && pos >= threshold) {
         playRecordedRef.current = true;
-        axiosClient.post(`/tracks/${currentTrackRef.current.id}/play`, {
+        const countedTrackId = currentTrackRef.current.id;
+        axiosClient.post(`/tracks/${countedTrackId}/play`, {
           sessionId: playbackSessionRef.current,
           listenedMs: Math.round(pos * 1000),
+        }).then((response) => {
+          if (response.counted) {
+            setCurrent((active) => active?.id === countedTrackId
+              ? { ...active, playCount: (active.playCount || 0) + 1 }
+              : active);
+          }
         }).catch(() => {
           playRecordedRef.current = false;
         });
