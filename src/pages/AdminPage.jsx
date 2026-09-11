@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Spinner from "../components/Spinner";
 import VerifiedBadge from "../components/VerifiedBadge";
+import TrackEditModal from "../components/TrackEditModal";
 import { useAuth } from "../context/AuthContext";
 import { useDialog } from "../context/DialogContext";
 import { axiosClient, fmtDur, fmtNum } from "../lib/api";
@@ -12,8 +13,6 @@ const TABS = [
   { id: "tracks", label: "Tracks", icon: "ti-music" },
 ];
 const ROLES = ["LISTENER", "ARTIST", "ADMIN"];
-const GENRES = ["QASIDAS", "NASHEEDS", "DUFF", "INSTRUMENTAL", "MADRASSA", "OTHER"];
-const LANGUAGES = ["ARABIC", "SWAHILI", "ENGLISH", "URDU", "OTHER"];
 
 const statusPill = (active) => active
   ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
@@ -113,21 +112,11 @@ export default function AdminPage() {
     }));
   });
 
-  const saveTrack = () => {
-    const draft = editingTrack;
-    if (!draft) return;
-    return runAction(`track-${draft.id}`, async () => {
-      const response = await axiosClient.patch(`/admin/tracks/${draft.id}`, {
-        title: draft.title,
-        genre: draft.genre,
-        language: draft.language,
-      });
-      setData((current) => ({
-        ...current,
-        tracks: current.tracks.map((item) => item.id === draft.id ? { ...item, ...response.track } : item),
-      }));
-      setEditingTrack(null);
-    });
+  const saveEditedTrack = (updated) => {
+    setData((current) => ({
+      ...current,
+      tracks: current.tracks.map((item) => item.id === updated.id ? { ...item, ...updated } : item),
+    }));
   };
 
   const deleteTrack = async (track) => {
@@ -264,33 +253,23 @@ export default function AdminPage() {
       {tab === "tracks" && (
         <section className="space-y-3">
           {filtered.tracks.map((track) => {
-            const editing = editingTrack?.id === track.id;
             return (
               <article key={track.id} className="rounded-2xl border border-white/5 bg-zinc-900/70 p-4">
-                {editing ? (
-                  <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_170px_150px_auto] lg:items-end">
-                    <label className="text-xs text-zinc-500">Title<input value={editingTrack.title} onChange={(event) => setEditingTrack((value) => ({ ...value, title: event.target.value }))} className="mt-1 block w-full rounded-xl border border-white/5 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-100" /></label>
-                    <label className="text-xs text-zinc-500">Genre<select value={editingTrack.genre} onChange={(event) => setEditingTrack((value) => ({ ...value, genre: event.target.value }))} className="mt-1 block w-full rounded-xl border border-white/5 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-100">{GENRES.map((value) => <option key={value}>{value}</option>)}</select></label>
-                    <label className="text-xs text-zinc-500">Language<select value={editingTrack.language} onChange={(event) => setEditingTrack((value) => ({ ...value, language: event.target.value }))} className="mt-1 block w-full rounded-xl border border-white/5 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-100">{LANGUAGES.map((value) => <option key={value}>{value}</option>)}</select></label>
-                    <div className="flex gap-2"><button onClick={saveTrack} className="rounded-xl border-0 bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white">Save</button><button onClick={() => setEditingTrack(null)} className="rounded-xl border-0 bg-zinc-800 px-4 py-2.5 text-sm text-zinc-300">Cancel</button></div>
-                  </div>
-                ) : (
-                  <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h2 className="truncate font-bold text-zinc-100">{track.title}</h2>
-                        <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${track.isPublished ? statusPill(true) : "border-amber-500/20 bg-amber-500/10 text-amber-400"}`}>{track.isPublished ? "PUBLISHED" : "HIDDEN"}</span>
-                      </div>
-                      <p className="text-xs text-zinc-500">{track.artist?.name} · {track.genre} · {track.language}</p>
-                      <p className="mt-2 text-[11px] text-zinc-600">{fmtDur(track.duration)} · {fmtNum(track.playCount)} plays · {track._count?.likes ?? 0} likes</p>
+                <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className="truncate font-bold text-zinc-100">{track.title}</h2>
+                      <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${track.isPublished ? statusPill(true) : "border-amber-500/20 bg-amber-500/10 text-amber-400"}`}>{track.isPublished ? "PUBLISHED" : "HIDDEN"}</span>
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                      <button onClick={() => setEditingTrack({ id: track.id, title: track.title, genre: track.genre, language: track.language })} className="rounded-xl border-0 bg-zinc-800 px-4 py-2 text-xs font-bold text-zinc-300">Edit</button>
-                      <button disabled={busy === `track-${track.id}`} onClick={() => toggleTrack(track)} className="rounded-xl border-0 bg-amber-500/10 px-4 py-2 text-xs font-bold text-amber-400">{track.isPublished ? "Unpublish" : "Publish"}</button>
-                      <button disabled={busy === `track-${track.id}`} onClick={() => deleteTrack(track)} className="rounded-xl border-0 bg-red-500/10 px-4 py-2 text-xs font-bold text-red-400">Delete</button>
-                    </div>
+                    <p className="text-xs text-zinc-500">{track.artist?.name} · {track.genre} · {track.language}</p>
+                    <p className="mt-2 text-[11px] text-zinc-600">{fmtDur(track.duration)} · {fmtNum(track.playCount)} plays · {track._count?.likes ?? 0} likes</p>
                   </div>
-                )}
+                  <div className="flex flex-wrap gap-2">
+                    <button onClick={() => setEditingTrack(track)} className="rounded-xl border-0 bg-zinc-800 px-4 py-2 text-xs font-bold text-zinc-300">Edit all details</button>
+                    <button disabled={busy === `track-${track.id}`} onClick={() => toggleTrack(track)} className="rounded-xl border-0 bg-amber-500/10 px-4 py-2 text-xs font-bold text-amber-400">{track.isPublished ? "Unpublish" : "Publish"}</button>
+                    <button disabled={busy === `track-${track.id}`} onClick={() => deleteTrack(track)} className="rounded-xl border-0 bg-red-500/10 px-4 py-2 text-xs font-bold text-red-400">Delete</button>
+                  </div>
+                </div>
               </article>
             );
           })}
@@ -298,6 +277,7 @@ export default function AdminPage() {
       )}
 
       {tab !== "overview" && !filtered[tab]?.length && <div className="rounded-2xl border border-dashed border-zinc-800 py-16 text-center text-sm text-zinc-500">No matching {tab}.</div>}
+      {editingTrack && <TrackEditModal track={editingTrack} onClose={() => setEditingTrack(null)} onSaved={saveEditedTrack} />}
     </div>
   );
 }

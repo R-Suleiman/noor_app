@@ -7,6 +7,7 @@ import { useAuth } from "../context/AuthContext";
 import { useNavigate, useParams } from "react-router-dom";
 import { useDialog } from "../context/DialogContext";
 import VerifiedBadge from "../components/VerifiedBadge";
+import TrackEditModal from "../components/TrackEditModal";
 
 export default function ProfilePage() {
   const { userId } = useParams();
@@ -24,6 +25,7 @@ export default function ProfilePage() {
   const [form, setForm] = useState({ displayName: "", bio: "", location: "" });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [editingTrack, setEditingTrack] = useState(null);
 
   // Upload & Library Sub-Management States
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
@@ -257,26 +259,17 @@ export default function ProfilePage() {
     }
   };
 
-  const handleEditTrack = async (track) => {
-    const title = await prompt("Update the title shown throughout Noor.", {
-      title: "Edit track title",
-      label: "Track title",
-      initialValue: track.title,
-      confirmLabel: "Save title",
-    });
-    if (!title?.trim() || title.trim() === track.title) return;
-    try {
-      const response = await axiosClient.patch(`/tracks/${track.id}`, { title: title.trim() });
-      setProfile((currentProfile) => ({
-        ...currentProfile,
-        artistProfile: {
-          ...currentProfile.artistProfile,
-          tracks: currentProfile.artistProfile.tracks.map((item) => item.id === track.id ? { ...item, ...response.track } : item),
-        },
-      }));
-    } catch (requestError) {
-      setError(requestError.message);
-    }
+  const saveEditedTrack = (updated) => {
+    setProfile((currentProfile) => ({
+      ...currentProfile,
+      artistProfile: currentProfile.artistProfile
+        ? {
+            ...currentProfile.artistProfile,
+            tracks: currentProfile.artistProfile.tracks.map((item) => item.id === updated.id ? { ...item, ...updated } : item),
+          }
+        : currentProfile.artistProfile,
+      tracks: currentProfile.tracks?.map((item) => item.id === updated.id ? { ...item, ...updated } : item),
+    }));
   };
 
   const toggleTrackPublished = async (track) => {
@@ -392,7 +385,7 @@ export default function ProfilePage() {
   const publishedTracks = artist?.tracks || profile.tracks || [];
 
   return (
-    <div className="max-w-7xl mx-auto min-h-screen pb-24 bg-zinc-950 text-zinc-100">
+    <div className="mx-auto min-h-screen max-w-7xl overflow-x-hidden bg-zinc-950 pb-24 text-zinc-100">
       {/* Hidden Binary Multi-part File Inputs */}
       <input
         type="file"
@@ -440,7 +433,7 @@ export default function ProfilePage() {
       </div>
 
       {/* PROFILE META OVERLAY CONTEXT GRID */}
-      <div className="px-8 pt-0">
+      <div className="px-4 pt-0 sm:px-8">
         <div className="flex flex-col sm:flex-row items-center sm:items-end gap-6 -mt-16 sm:-mt-24 mb-8 pb-8 border-b border-white/5 text-center sm:text-left relative z-10">
           <div className="relative group rounded-full flex-shrink-0">
             <Avatar
@@ -485,7 +478,7 @@ export default function ProfilePage() {
                   }
                   className="bg-zinc-900 border border-white/10 rounded-xl px-4 py-2 text-sm font-medium text-zinc-100 outline-none w-full focus:border-emerald-500 transition-colors disabled:cursor-not-allowed disabled:text-zinc-500"
                 />
-                {profile.role === "ADMIN" && <p className="mt-1.5 text-xs text-zinc-600">The public administrator name is fixed as ADMIN.</p>}
+                {profile.role === "ADMIN" && <p className="mt-1.5 text-xs text-zinc-600">The public administrator name is fixed as NOOR.</p>}
               </div>
             ) : (
               <div className="mb-1 flex items-center justify-center gap-2 sm:justify-start">
@@ -516,17 +509,17 @@ export default function ProfilePage() {
               </span>
             </p>
 
-            <div className="flex items-center justify-center sm:justify-start gap-6 bg-zinc-900/40 inline-flex px-5 py-2.5 rounded-xl border border-white/5 shadow-inner">
+            <div className="grid w-full grid-cols-3 gap-2 rounded-xl border border-white/5 bg-zinc-900/40 px-3 py-2.5 shadow-inner sm:inline-grid sm:w-auto sm:gap-6 sm:px-5">
               {[
                 ["Followers", counts.followers ?? 0],
                 ["Following", counts.following ?? 0],
                 ["Saved Likes", likedCollection.length || counts.likes || 0],
               ].map(([label, val]) => (
                 <div key={label} className="text-center sm:text-left">
-                  <span className="text-sm font-bold text-zinc-100 block sm:inline mr-1">
+                  <span className="block text-sm font-bold text-zinc-100 sm:inline sm:mr-1">
                     {fmtNum(val)}
                   </span>
-                  <span className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">
+                  <span className="text-[9px] font-semibold uppercase tracking-wide text-zinc-500 sm:text-[11px] sm:tracking-wider">
                     {label}
                   </span>
                 </div>
@@ -535,7 +528,7 @@ export default function ProfilePage() {
           </div>
 
           {/* ACTION BUTTON WRAPPER ROW */}
-          <div className="flex gap-2 w-full sm:w-auto justify-center sm:justify-end flex-shrink-0 sm:mb-2">
+          <div className="flex w-full flex-shrink-0 flex-wrap justify-center gap-2 sm:mb-2 sm:w-auto sm:justify-end">
             {isOwn && (
               <>
                 {isArtist && (
@@ -595,7 +588,7 @@ export default function ProfilePage() {
         </div>
 
         {/* CONTENT TABS VIEWPORTS WORK PANELS */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-start">
+        <div className="grid min-w-0 grid-cols-1 items-start gap-8 md:grid-cols-3">
           {/* LEFT COLUMN: INFORMATION DETAILS SIDEBAR */}
           <div className="md:col-span-1 space-y-4">
             <div className="bg-zinc-900/40 border border-white/5 rounded-2xl p-5 shadow-sm">
@@ -669,12 +662,12 @@ export default function ProfilePage() {
           </div>
 
           {/* RIGHT COLUMN: INTERACTIVE TABS VIEWPORTS */}
-          <div className="md:col-span-2 space-y-6">
-            <div className="flex gap-4 border-b border-white/5 pb-px overflow-x-auto">
+          <div className="min-w-0 space-y-6 md:col-span-2">
+            <div className="grid grid-cols-2 gap-2 border-b border-white/5 pb-3 sm:flex sm:gap-4 sm:overflow-x-auto sm:pb-px">
               {isArtist && (
                 <button
                   onClick={() => setActiveTab("tracks")}
-                  className={`pb-3 px-1 text-xs font-bold uppercase tracking-wider bg-transparent border-0 cursor-pointer transition-all relative shrink-0 ${
+                  className={`relative min-w-0 rounded-xl border border-white/5 bg-zinc-900 px-2 py-3 text-[10px] font-bold uppercase tracking-wide transition-all sm:shrink-0 sm:rounded-none sm:border-0 sm:bg-transparent sm:px-1 sm:pb-3 sm:text-xs sm:tracking-wider ${
                     activeTab === "tracks"
                       ? "text-emerald-400"
                       : "text-zinc-500 hover:text-zinc-300"
@@ -690,7 +683,7 @@ export default function ProfilePage() {
               {isArtist && isOwn && (
                 <button
                   onClick={() => setActiveTab("manage_library")}
-                  className={`pb-3 px-1 text-xs font-bold uppercase tracking-wider bg-transparent border-0 cursor-pointer transition-all relative shrink-0 ${
+                  className={`relative min-w-0 rounded-xl border border-white/5 bg-zinc-900 px-2 py-3 text-[10px] font-bold uppercase tracking-wide transition-all sm:shrink-0 sm:rounded-none sm:border-0 sm:bg-transparent sm:px-1 sm:pb-3 sm:text-xs sm:tracking-wider ${
                     activeTab === "manage_library"
                       ? "text-emerald-400"
                       : "text-zinc-500 hover:text-zinc-300"
@@ -705,7 +698,7 @@ export default function ProfilePage() {
 
               <button
                 onClick={() => setActiveTab("liked")}
-                className={`pb-3 px-1 text-xs font-bold uppercase tracking-wider bg-transparent border-0 cursor-pointer transition-all relative shrink-0 ${
+                className={`relative min-w-0 rounded-xl border border-white/5 bg-zinc-900 px-2 py-3 text-[10px] font-bold uppercase tracking-wide transition-all sm:shrink-0 sm:rounded-none sm:border-0 sm:bg-transparent sm:px-1 sm:pb-3 sm:text-xs sm:tracking-wider ${
                   activeTab === "liked"
                     ? "text-emerald-400"
                     : "text-zinc-500 hover:text-zinc-300"
@@ -719,7 +712,7 @@ export default function ProfilePage() {
 
               <button
                 onClick={() => setActiveTab("playlists")}
-                className={`pb-3 px-1 text-xs font-bold uppercase tracking-wider bg-transparent border-0 cursor-pointer transition-all relative shrink-0 ${
+                className={`relative min-w-0 rounded-xl border border-white/5 bg-zinc-900 px-2 py-3 text-[10px] font-bold uppercase tracking-wide transition-all sm:shrink-0 sm:rounded-none sm:border-0 sm:bg-transparent sm:px-1 sm:pb-3 sm:text-xs sm:tracking-wider ${
                   activeTab === "playlists"
                     ? "text-emerald-400"
                     : "text-zinc-500 hover:text-zinc-300"
@@ -737,8 +730,8 @@ export default function ProfilePage() {
               {activeTab === "tracks" && isArtist && (
                 <>
                   {publishedTracks.map((track, i) => (
-                    <div key={track.id} className="flex items-center gap-2">
-                      <div className={`flex-1 ${track.isPublished ? "" : "opacity-50"}`}>
+                    <div key={track.id} className="flex min-w-0 items-center gap-2">
+                      <div className={`min-w-0 flex-1 ${track.isPublished ? "" : "opacity-50"}`}>
                         <TrackRow
                           track={{ ...track, artist: { name: profile.displayName } }}
                           index={i}
@@ -747,7 +740,7 @@ export default function ProfilePage() {
                       </div>
                       {isOwn && (
                         <div className="flex gap-1">
-                          <button onClick={() => handleEditTrack(track)} title="Edit title" className="bg-transparent text-zinc-500 hover:text-zinc-200 border-0 cursor-pointer"><i className="ti ti-edit" /></button>
+                          <button onClick={() => setEditingTrack(track)} title="Edit all track details" className="bg-transparent text-zinc-500 hover:text-zinc-200 border-0 cursor-pointer"><i className="ti ti-edit" /></button>
                           <button onClick={() => toggleTrackPublished(track)} title={track.isPublished ? "Unpublish" : "Publish"} className="bg-transparent text-zinc-500 hover:text-emerald-400 border-0 cursor-pointer"><i className={`ti ${track.isPublished ? "ti-eye-off" : "ti-eye"}`} /></button>
                           <button onClick={() => handleDeleteTrack(track.id)} title="Delete" className="bg-transparent text-zinc-500 hover:text-red-400 border-0 cursor-pointer"><i className="ti ti-trash" /></button>
                         </div>
@@ -1016,6 +1009,7 @@ export default function ProfilePage() {
           </div>
         </div>
       </div>
+      {editingTrack && <TrackEditModal track={editingTrack} onClose={() => setEditingTrack(null)} onSaved={saveEditedTrack} />}
     </div>
   );
 }
