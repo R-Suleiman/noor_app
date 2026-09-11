@@ -152,7 +152,7 @@ export default function AdminPage() {
   const stats = {
     users: data.users.length,
     active: data.users.filter((item) => item.isActive).length,
-    artists: data.artists.filter((item) => item.user?.role === "ARTIST" && item.user?.isActive).length,
+    artists: data.artists.filter((item) => ["ARTIST", "ADMIN"].includes(item.user?.role) && item.user?.isActive).length,
     verified: data.artists.filter((item) => item.isVerified).length,
     published: data.tracks.filter((item) => item.isPublished).length,
     plays: data.tracks.reduce((sum, item) => sum + (item.playCount || 0), 0),
@@ -248,13 +248,13 @@ export default function AdminPage() {
                   </div>
                   <p className="truncate text-xs text-zinc-500">{artist.user?.email}</p>
                 </div>
-                <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${statusPill(artist.user?.isActive)}`}>{artist.user?.isActive && artist.user?.role === "ARTIST" ? "PUBLIC" : "HIDDEN"}</span>
+                <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${statusPill(artist.user?.isActive)}`}>{artist.user?.isActive && ["ARTIST", "ADMIN"].includes(artist.user?.role) ? "PUBLIC" : "HIDDEN"}</span>
               </div>
               <div className="my-5 grid grid-cols-3 gap-2 text-center">
                 {[["Tracks", artist._count?.tracks], ["Albums", artist._count?.albums], ["Followers", artist._count?.followers]].map(([label, value]) => <div key={label} className="rounded-xl bg-zinc-950/70 p-2"><strong className="block text-zinc-200">{value ?? 0}</strong><span className="text-[10px] text-zinc-600">{label}</span></div>)}
               </div>
-              <button disabled={busy === `artist-${artist.id}`} onClick={() => patchArtist(artist)} className={`w-full rounded-xl border-0 px-4 py-2.5 text-sm font-bold ${artist.isVerified ? "bg-zinc-800 text-zinc-300" : "bg-sky-600 text-white hover:bg-sky-500"}`}>
-                {artist.isVerified ? "Remove verification" : "Verify artist"}
+              <button disabled={artist.user?.role === "ADMIN" || busy === `artist-${artist.id}`} onClick={() => patchArtist(artist)} className={`w-full rounded-xl border-0 px-4 py-2.5 text-sm font-bold disabled:cursor-not-allowed ${artist.isVerified ? "bg-zinc-800 text-zinc-300" : "bg-sky-600 text-white hover:bg-sky-500"}`}>
+                {artist.user?.role === "ADMIN" ? "Verified by default" : artist.isVerified ? "Remove verification" : "Verify artist"}
               </button>
             </article>
           ))}

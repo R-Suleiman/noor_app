@@ -55,7 +55,7 @@ export default function UploadPage() {
 
   // Load Album List Contexts dynamically
   useEffect(() => {
-    if (user?.id && user?.role === "ARTIST") {
+    if (user?.id && ["ARTIST", "ADMIN"].includes(user?.role)) {
       setLoadingAlbums(true);
       axiosClient.get(`/artists/${user.id}/albums`)
         .then((res) => {
@@ -71,7 +71,7 @@ export default function UploadPage() {
   }, [coverPreview]);
 
   // Guard Clause Authentication Filter
-  if (!user || user.role !== "ARTIST") {
+  if (!user || !["ARTIST", "ADMIN"].includes(user.role)) {
     return (
       <div className="p-8 flex flex-col items-center justify-center py-32 text-center max-w-md mx-auto">
         <div className="w-16 h-16 rounded-2xl bg-zinc-900/50 border border-white/5 flex items-center justify-center mb-5 text-zinc-500">
@@ -81,7 +81,7 @@ export default function UploadPage() {
           Artist account required
         </h3>
         <p className="text-sm text-zinc-500 leading-relaxed">
-          Only registered artists and verified madrassas can publish spiritual tracks to the Noor media network.
+          Only creator and administrator accounts can publish tracks to Noor.
         </p>
       </div>
     );

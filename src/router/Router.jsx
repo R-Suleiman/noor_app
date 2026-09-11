@@ -36,7 +36,7 @@ const Router = () => [
         </Route>
 
         {/* ─── PROTECTED ARTIST ONLY ROUTES ─── */}
-        <Route element={<ProtectedRoute allowedRoles={["ARTIST"]} />}>
+        <Route element={<ProtectedRoute allowedRoles={["ARTIST", "ADMIN"]} />}>
           <Route path="/upload" element={<UploadPage />} />
         </Route>
         <Route element={<ProtectedRoute allowedRoles={["ADMIN"]} />}>

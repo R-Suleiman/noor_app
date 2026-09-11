@@ -36,9 +36,11 @@ function ArtistSkeletons() {
 export default function HomePage() {
   const { current, playing, buffering, togglePlay, progress, play } = usePlayer();
   useAuth();
-  const [tracks, setTracks] = useState([]);
+  const [trendingTracks, setTrendingTracks] = useState([]);
+  const [newTracks, setNewTracks] = useState([]);
   const [artists, setArtists] = useState([]);
-  const [loadingTracks, setLoadingTracks] = useState(true);
+  const [loadingTrending, setLoadingTrending] = useState(true);
+  const [loadingNew, setLoadingNew] = useState(true);
   const [loadingArtists, setLoadingArtists] = useState(true);
   const navigate = useNavigate()
 
@@ -46,11 +48,17 @@ export default function HomePage() {
     axiosClient
       .get("/tracks/trending")
       .then((res) => {
-        setTracks(res.tracks || [])
+        setTrendingTracks(res.tracks || [])
       }
     )
       .catch(() => {})
-      .finally(() => setLoadingTracks(false));
+      .finally(() => setLoadingTrending(false));
+
+    axiosClient
+      .get("/tracks?sort=recent&limit=10")
+      .then((res) => setNewTracks(res.tracks || []))
+      .catch(() => {})
+      .finally(() => setLoadingNew(false));
 
     axiosClient
       .get("/artists")
@@ -59,12 +67,14 @@ export default function HomePage() {
       .finally(() => setLoadingArtists(false));
   }, []);
 
+  const discoveryTracks = newTracks.length ? newTracks : trendingTracks;
+
   const handleBannerPlayback = () => {
     if (current) {
       togglePlay();
       return;
     }
-    if (tracks.length > 0) play(tracks[0], tracks);
+    if (discoveryTracks.length > 0) play(discoveryTracks[0], discoveryTracks);
   };
 
   const bannerButtonLabel = buffering
@@ -106,13 +116,30 @@ export default function HomePage() {
           <button
             type="button"
             onClick={handleBannerPlayback}
-            disabled={buffering || (!current && tracks.length === 0)}
+            disabled={buffering || (!current && discoveryTracks.length === 0)}
             aria-label={bannerButtonLabel}
             className="relative z-10 inline-flex items-center gap-2 rounded-xl border-0 bg-emerald-600 px-6 py-3 text-sm font-semibold text-white shadow-lg transition-all hover:scale-[1.02] hover:bg-emerald-500 active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400 disabled:hover:scale-100"
           >
             <i className={`ti ${buffering ? "ti-loader-2 animate-spin" : playing && current ? "ti-player-pause-filled" : "ti-player-play-filled"}`} />
             {bannerButtonLabel}
           </button>
+        </div>
+
+        {/* New Tracks Section */}
+        <div className="mb-10">
+          <div className="mb-4 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-widest text-zinc-400">New releases</p>
+              <p className="mt-1 text-xs text-zinc-600">The latest audio added to Noor</p>
+            </div>
+          </div>
+          <div className="flex flex-col gap-1">
+            {loadingNew
+              ? <TrackSkeletons />
+              : newTracks.map((track, index) => (
+                  <TrackRow key={track.id} track={track} index={index} liked={track.liked} trackList={newTracks} />
+                ))}
+          </div>
         </div>
 
         {/* Trending Tracks Section */}
@@ -123,10 +150,10 @@ export default function HomePage() {
             </p>
           </div>
           <div className="flex flex-col gap-1">
-            {loadingTracks
+            {loadingTrending
               ? <TrackSkeletons />
-              : tracks.map((t, i) => (
-                  <TrackRow key={t.id} track={t} index={i} liked={t.liked} trackList={tracks} />
+              : trendingTracks.map((t, i) => (
+                  <TrackRow key={t.id} track={t} index={i} liked={t.liked} trackList={trendingTracks} />
                 ))}
           </div>
         </div>

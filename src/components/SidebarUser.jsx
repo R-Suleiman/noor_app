@@ -24,13 +24,13 @@ export default function SidebarUser() {
         onClick={() => navigate(`/profile/${user.id}`)}
         className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-white/5 transition-colors cursor-pointer border-0 bg-transparent text-left"
       >
-        <Avatar name={user.displayName} url={mediaUrl(user.avatarUrl)} size="sm" />
+        <Avatar name={user.role === "ADMIN" ? "ADMIN" : user.displayName} url={mediaUrl(user.avatarUrl)} size="sm" />
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium text-zinc-100 truncate">
-            {user.displayName}
+            {user.role === "ADMIN" ? "ADMIN" : user.displayName}
           </p>
           <p className="text-xs text-zinc-500 truncate">
-            {user.role === "ARTIST" ? "Artist" : "Listener"}
+            {user.role === "ADMIN" ? "Administrator · Creator" : user.role === "ARTIST" ? "Artist" : "Listener"}
           </p>
         </div>
       </button>

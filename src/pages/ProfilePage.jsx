@@ -46,7 +46,7 @@ export default function ProfilePage() {
 
   const uid = userId ?? authUser?.id;
   const isOwn = authUser?.id && uid && String(authUser.id) === String(uid);
-  const isArtist = profile?.role === "ARTIST";
+  const isArtist = ["ARTIST", "ADMIN"].includes(profile?.role);
 
   // Main Profile Fetch Effect
   useEffect(() => {
@@ -71,7 +71,7 @@ export default function ProfilePage() {
           location: userData.artistProfile?.location || "",
         });
 
-        if (userData.role === "ARTIST") {
+        if (["ARTIST", "ADMIN"].includes(userData.role)) {
           setActiveTab("tracks");
         } else {
           setActiveTab("liked");
@@ -449,7 +449,7 @@ export default function ProfilePage() {
               size="xl"
               className="shadow-2xl ring-4 ring-zinc-950 w-32 h-32 sm:w-40 sm:h-40 object-cover"
             />
-            {isOwn && (
+            {isOwn && profile.role !== "ADMIN" && (
               <button
                 onClick={() => avatarInputRef.current?.click()}
                 disabled={uploadingAvatar}
@@ -479,11 +479,13 @@ export default function ProfilePage() {
                 <input
                   type="text"
                   value={form.displayName}
+                  disabled={profile.role === "ADMIN"}
                   onChange={(e) =>
                     setForm((f) => ({ ...f, displayName: e.target.value }))
                   }
-                  className="bg-zinc-900 border border-white/10 rounded-xl px-4 py-2 text-sm font-medium text-zinc-100 outline-none w-full focus:border-emerald-500 transition-colors"
+                  className="bg-zinc-900 border border-white/10 rounded-xl px-4 py-2 text-sm font-medium text-zinc-100 outline-none w-full focus:border-emerald-500 transition-colors disabled:cursor-not-allowed disabled:text-zinc-500"
                 />
+                {profile.role === "ADMIN" && <p className="mt-1.5 text-xs text-zinc-600">The public administrator name is fixed as ADMIN.</p>}
               </div>
             ) : (
               <div className="mb-1 flex items-center justify-center gap-2 sm:justify-start">
@@ -504,7 +506,9 @@ export default function ProfilePage() {
                     : "bg-blue-500/10 text-blue-400 border border-blue-500/10"
                 }`}
               >
-                {isArtist
+                {profile.role === "ADMIN"
+                  ? "Administrator Creator"
+                  : isArtist
                   ? artist?.isMadrassa
                     ? "Madrassa Account"
                     : "Artist Profile"

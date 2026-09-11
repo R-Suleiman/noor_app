@@ -20,7 +20,7 @@ export default function RootLayout() {
   const { current } = usePlayer();
   const showPlayerBar = Boolean(current) && location.pathname !== "/now-playing";
   const visibleNav = NAV.filter((item) => {
-    if (item.path === "/upload") return user?.role === "ARTIST";
+    if (item.path === "/upload") return ["ARTIST", "ADMIN"].includes(user?.role);
     if (item.path === "/admin") return user?.role === "ADMIN";
     if (item.path === "/library") return Boolean(user);
     return true;
