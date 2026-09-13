@@ -8,6 +8,8 @@ import { fmtDur, fmtNum, mediaUrl, trackBg } from "../lib/api";
 import VerifiedBadge from "../components/VerifiedBadge";
 import { maqamLabel } from "../constants/trackMetadata";
 import { useDialog } from "../context/DialogContext";
+import AddToPlaylistButton from "../components/AddToPlaylistButton";
+import MarqueeText from "../components/MarqueeText";
 
 export default function NowPlayingPage() {
   const navigate = useNavigate();
@@ -30,6 +32,7 @@ export default function NowPlayingPage() {
     repeatMode,
     toggleShuffle,
     cycleRepeat,
+    playbackContext,
   } = usePlayer();
   const { liked, likesCount, toggleLike } = useTrackLike(current, { refresh: true });
 
@@ -52,6 +55,9 @@ export default function NowPlayingPage() {
   const artist = typeof current.artist === "object" ? current.artist : null;
   const artistName = artist?.name || current.artist || "Unknown artist";
   const artistId = artist?.id || current.artistId;
+  const sourceLabel = playbackContext?.type === "playlist"
+    ? `Playlist · ${playbackContext.title}`
+    : current.album?.title || "Noor Audio";
   const shareTrack = async () => {
     const url = `${window.location.origin}/tracks/${current.id}`;
     const shareData = { title: `${current.title} — Noor`, text: `Listen to ${current.title} by ${artistName} on Noor.`, url };
@@ -70,15 +76,15 @@ export default function NowPlayingPage() {
   return (
     <div className="min-h-full bg-gradient-to-b from-emerald-950/40 via-zinc-950 to-zinc-950 px-5 py-5 sm:px-8 sm:py-8">
       <div className="max-w-xl mx-auto">
-        <header className="flex items-center justify-between mb-7">
-          <button onClick={closeNowPlaying} aria-label="Close Now Playing" className="w-10 h-10 rounded-full bg-zinc-900/80 border border-white/5 text-zinc-200 cursor-pointer">
+        <header className="mb-7 grid grid-cols-[88px_minmax(0,1fr)_88px] items-center">
+          <button onClick={closeNowPlaying} aria-label="Close Now Playing" className="h-10 w-10 justify-self-start rounded-full border border-white/5 bg-zinc-900/80 text-zinc-200 cursor-pointer">
             <i className="ti ti-chevron-down text-xl" />
           </button>
-          <div className="text-center">
+          <div className="min-w-0 text-center">
             <p className="text-[10px] uppercase tracking-[0.24em] text-emerald-400 font-bold">Now Playing</p>
-            <p className="text-xs text-zinc-500 mt-0.5 truncate max-w-48">{current.album?.title || "Noor Audio"}</p>
+            <MarqueeText text={sourceLabel} className="mt-0.5 w-full text-xs text-zinc-500" />
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center justify-self-end gap-2">
             <button type="button" onClick={shareTrack} aria-label="Share track" className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/5 bg-zinc-900/80 text-zinc-400">
               <i className="ti ti-share-3 text-lg" aria-hidden="true" />
             </button>
@@ -98,7 +104,7 @@ export default function NowPlayingPage() {
 
         <section className="mt-7 flex items-start gap-4">
           <div className="min-w-0 flex-1">
-            <h1 className="text-2xl font-bold text-zinc-50 truncate">{current.title}</h1>
+            <MarqueeText text={current.title} className="text-2xl font-bold text-zinc-50" />
             <button
               type="button"
               disabled={!artistId}
@@ -171,6 +177,12 @@ export default function NowPlayingPage() {
             <i className={`ti ${repeatMode === "one" ? "ti-repeat-once" : "ti-repeat"}`} />
           </button>
         </section>
+
+        <AddToPlaylistButton
+          track={current}
+          showLabel
+          className="mt-6 w-full rounded-xl border border-white/5 bg-zinc-900/75 px-4 py-3 text-sm font-semibold text-zinc-200 transition-colors hover:bg-zinc-800 hover:text-emerald-300"
+        />
 
         <section className="mt-9 bg-zinc-900/75 border border-white/5 rounded-2xl p-4">
           <p className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 font-bold mb-3">About the artist</p>

@@ -82,6 +82,8 @@ export default function PlaylistPage() {
   if (loading) return <div className="py-24 flex justify-center"><Spinner /></div>;
   if (error || !playlist) return <div className="p-8 text-red-400">{error || "Playlist not found"}</div>;
 
+  const playbackContext = { type: "playlist", id: playlist.id, title: playlist.title };
+
   return (
     <div className="p-4 sm:p-8 max-w-5xl mx-auto">
       <div className="mb-8 flex flex-col items-start gap-5 sm:flex-row sm:items-end">
@@ -91,7 +93,7 @@ export default function PlaylistPage() {
           <h1 className="break-words text-3xl font-bold text-white sm:text-4xl">{playlist.title}</h1>
           <p className="text-sm text-zinc-500">By {playlist.user.displayName} · {playlist.tracks.length} tracks</p>
           <div className="mt-4 flex flex-wrap gap-2">
-            {!!playlist.tracks.length && <button onClick={() => play(playlist.tracks[0], playlist.tracks)} className="bg-emerald-600 text-white rounded-full px-5 py-2 border-0 cursor-pointer">Play</button>}
+            {!!playlist.tracks.length && <button onClick={() => play(playlist.tracks[0], playlist.tracks, { context: playbackContext })} className="bg-emerald-600 text-white rounded-full px-5 py-2 border-0 cursor-pointer">Play</button>}
             {playlist.isOwner && <button onClick={editPlaylist} className="bg-zinc-800 text-zinc-200 rounded-full px-5 py-2 border-0 cursor-pointer">Edit</button>}
             {playlist.isOwner && <button onClick={togglePrivacy} className="bg-zinc-800 text-zinc-200 rounded-full px-5 py-2 border-0 cursor-pointer">{playlist.isPublic ? "Make private" : "Make public"}</button>}
             {playlist.isOwner && <button onClick={deletePlaylist} className="bg-zinc-800 text-red-400 rounded-full px-5 py-2 border-0 cursor-pointer">Delete</button>}
@@ -101,7 +103,7 @@ export default function PlaylistPage() {
       <div className="space-y-1">
         {playlist.tracks.map((track, index) => (
           <div key={track.id} className="flex items-center gap-2">
-            <div className="flex-1"><TrackRow track={track} index={index} trackList={playlist.tracks} /></div>
+            <div className="min-w-0 flex-1"><TrackRow track={track} index={index} trackList={playlist.tracks} playbackContext={playbackContext} /></div>
             {playlist.isOwner && <div className="flex"><button onClick={() => moveTrack(index, -1)} disabled={index === 0} className="text-zinc-500 bg-transparent border-0 cursor-pointer disabled:opacity-20"><i className="ti ti-arrow-up" /></button><button onClick={() => moveTrack(index, 1)} disabled={index === playlist.tracks.length - 1} className="text-zinc-500 bg-transparent border-0 cursor-pointer disabled:opacity-20"><i className="ti ti-arrow-down" /></button><button onClick={() => removeTrack(track.id)} className="text-zinc-500 hover:text-red-400 bg-transparent border-0 cursor-pointer"><i className="ti ti-trash" /></button></div>}
           </div>
         ))}

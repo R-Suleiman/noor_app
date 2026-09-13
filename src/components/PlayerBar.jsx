@@ -6,6 +6,7 @@ import { useTrackLike } from "../hooks/useTrackLike";
 import HeartIcon from "./HeartIcon";
 import { useLocation, useNavigate } from "react-router-dom";
 import VerifiedBadge from "./VerifiedBadge";
+import MarqueeText from "./MarqueeText";
 
 export default function PlayerBar() {
   const {
@@ -91,9 +92,7 @@ export default function PlayerBar() {
           )}
         </div>
         <span className="min-w-0 flex-1">
-          <span className="block text-sm font-semibold text-zinc-100 truncate">
-            {current.title}
-          </span>
+          <MarqueeText text={current.title} className="text-sm font-semibold text-zinc-100" />
           {playbackError ? (
             <span className="mt-0.5 block truncate text-xs text-amber-400">{playbackError}</span>
           ) : (
@@ -145,9 +144,7 @@ export default function PlayerBar() {
           )}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-zinc-100 truncate">
-            {current.title}
-          </p>
+          <MarqueeText text={current.title} className="text-sm font-semibold text-zinc-100" />
           <p className={`truncate text-xs ${playbackError ? "text-amber-400" : "text-zinc-400"}`}>
             {playbackError || current.artist?.name || current.artist}
           </p>

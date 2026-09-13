@@ -45,6 +45,25 @@ img {
   -webkit-user-drag: none;
 }
 
+@keyframes noor-marquee {
+  0%,
+  14% {
+    transform: translateX(0);
+  }
+  72%,
+  86% {
+    transform: translateX(calc(-1 * var(--noor-marquee-distance)));
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+
+.noor-marquee-text {
+  animation: noor-marquee var(--noor-marquee-duration) ease-in-out infinite;
+  will-change: transform;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

@@ -1,20 +1,23 @@
 import { usePlayer } from "../context/PlayerContext";
 import { useAuth } from "../context/AuthContext";
-import { axiosClient, mediaUrl, trackBg } from "../lib/api";
+import { mediaUrl, trackBg } from "../lib/api";
 import { useTrackLike } from "../hooks/useTrackLike";
 import { useDialog } from "../context/DialogContext";
 import HeartIcon from "./HeartIcon";
 import VerifiedBadge from "./VerifiedBadge";
+import AddToPlaylistButton from "./AddToPlaylistButton";
+import MarqueeText from "./MarqueeText";
 
 export default function TrackRow({
   track,
   index,
   liked: likedProp,
   trackList = [],
+  playbackContext = null,
 }) {
-  const { play, togglePlay, current, playing } = usePlayer();
+  const { play, togglePlay, current, playing, updatePlaybackContext } = usePlayer();
   const { user } = useAuth();
-  const { alert: showAlert, prompt, choose } = useDialog();
+  const { alert: showAlert } = useDialog();
   const { liked, likesCount, toggleLike } = useTrackLike({
     ...track,
     likedByMe: likedProp ?? track.likedByMe,
@@ -24,10 +27,11 @@ export default function TrackRow({
 
   const handleRowAction = () => {
     if (active) {
+      if (playbackContext) updatePlaybackContext(playbackContext);
       togglePlay();
     } else {
       // Pass both the chosen track and the contextual tracklist array to populate the queue
-      play(track, trackList);
+      play(track, trackList, { context: playbackContext });
     }
   };
 
@@ -39,36 +43,6 @@ export default function TrackRow({
     }
 
     await toggleLike();
-  };
-
-  const handleAddToPlaylist = async (e) => {
-    e.stopPropagation();
-    if (!user) return;
-    try {
-      let { playlists } = await axiosClient.get("/users/me/playlists");
-      if (!playlists.length) {
-        const title = await prompt("You need a playlist before adding this track.", {
-          title: "Create your first playlist",
-          label: "Playlist name",
-          confirmLabel: "Create playlist",
-        });
-        if (!title?.trim()) return;
-        const response = await axiosClient.post("/playlists", { title: title.trim() });
-        playlists = [response.playlist];
-      }
-      const playlistId = await choose("Select the collection for this track.", {
-        title: "Add to playlist",
-        options: playlists.map((playlist) => ({
-          value: playlist.id,
-          label: playlist.title,
-          meta: `${playlist._count?.tracks ?? 0} tracks`,
-        })),
-      });
-      if (!playlistId) return;
-      await axiosClient.put(`/playlists/${playlistId}/tracks/${track.id}`);
-    } catch (error) {
-      showAlert(error.message || "Could not add track to playlist", { title: "Playlist update failed" });
-    }
   };
 
   return (
@@ -154,11 +128,10 @@ export default function TrackRow({
 
       {/* Core Profile Descriptor Column */}
       <div className="min-w-0">
-        <p
-          className={`text-sm font-semibold truncate ${active ? "text-emerald-400" : "text-zinc-100"}`}
-        >
-          {track.title}
-        </p>
+        <MarqueeText
+          text={track.title}
+          className={`text-sm font-semibold ${active ? "text-emerald-400" : "text-zinc-100"}`}
+        />
         <p className="mt-0.5 flex min-w-0 items-center gap-1 text-xs text-zinc-400 transition-colors hover:text-zinc-300">
           <span className="truncate">{track.artist?.name ?? "Unknown Speaker"}</span>
           {track.artist?.isVerified && <VerifiedBadge showLabel={false} className="shrink-0" />}
@@ -182,9 +155,7 @@ export default function TrackRow({
 
       {/* Reactive Favorite Activation Toggle Button */}
       <div className="flex items-center justify-end gap-1">
-        <button onClick={handleAddToPlaylist} title="Add to playlist" aria-label={`Add ${track.title} to playlist`} className="bg-transparent border-0 cursor-pointer p-1 text-base text-zinc-500 hover:text-emerald-400">
-          <i className="ti ti-playlist-add" />
-        </button>
+        <AddToPlaylistButton track={track} className="bg-transparent p-1 text-base text-zinc-500 hover:text-emerald-400" />
         <button
           onClick={handleLike}
           aria-label={liked ? "Unlike track" : "Like track"}

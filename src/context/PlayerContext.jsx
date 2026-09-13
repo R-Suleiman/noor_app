@@ -41,6 +41,7 @@ export function PlayerProvider({ children }) {
   const playRecordedRef = useRef(false);
   const advanceRef = useRef(null);
   const repeatRef = useRef("off");
+  const playbackContextRef = useRef(null);
   const restoreAttemptedRef = useRef(false);
   const snapshotRef = useRef(null);
 
@@ -54,6 +55,7 @@ export function PlayerProvider({ children }) {
   const [volume, setVolState] = useState(initialVolume);
   const [shuffle, setShuffle] = useState(false);
   const [repeatMode, setRepeatMode] = useState("off");
+  const [playbackContext, setPlaybackContext] = useState(null);
 
   useEffect(() => {
     repeatRef.current = repeatMode;
@@ -119,6 +121,8 @@ export function PlayerProvider({ children }) {
     localStorage.removeItem(PLAYER_SESSION_KEY);
     setCurrent(null);
     setQueue([]);
+    playbackContextRef.current = null;
+    setPlaybackContext(null);
     setStatus("idle");
     setProgress(0);
     setElapsed(0);
@@ -147,6 +151,9 @@ export function PlayerProvider({ children }) {
     (track, newQueue = [], options = {}) => {
       const startAt = Math.max(0, Number(options.startAt) || 0);
       const autoplay = options.autoplay !== false;
+      const nextContext = options.context ?? null;
+      playbackContextRef.current = nextContext;
+      setPlaybackContext(nextContext);
 
       if (howlRef.current && currentTrackRef.current?.id === track.id) {
         if (howlRef.current.state() === "loaded") {
@@ -314,7 +321,7 @@ export function PlayerProvider({ children }) {
       next = queue[index + 1];
     }
     if (!next && repeatRef.current === "all") next = queue[0];
-    if (next) play(next, queue);
+    if (next) play(next, queue, { context: playbackContextRef.current });
     else if (fromEnd) setStatus("paused");
   }, [queue, play, shuffle]);
 
@@ -341,8 +348,13 @@ export function PlayerProvider({ children }) {
     const currentIndex = queue.findIndex((t) => t.id === activeTrack.id);
     const prev = queue[currentIndex - 1]
       || (repeatRef.current === "all" ? queue.at(-1) : null);
-    if (prev) play(prev, queue);
+    if (prev) play(prev, queue, { context: playbackContextRef.current });
   }, [queue, play, seek]);
+
+  const updatePlaybackContext = useCallback((context) => {
+    playbackContextRef.current = context ?? null;
+    setPlaybackContext(context ?? null);
+  }, []);
 
   // Present Noor as a first-class media app on supported phones and desktops:
   // metadata and controls appear on the lock screen, notification shade,
@@ -446,13 +458,14 @@ export function PlayerProvider({ children }) {
           status,
           shuffle,
           repeatMode,
+          playbackContext,
           userId: user?.id ?? null,
           playbackSessionId: playbackSessionRef.current,
           playRecorded: playRecordedRef.current,
           savedAt: Date.now(),
         }
       : null;
-  }, [current, queue, elapsed, duration, status, shuffle, repeatMode, user?.id]);
+  }, [current, queue, elapsed, duration, status, shuffle, repeatMode, playbackContext, user?.id]);
 
   const persistSnapshot = useCallback(() => {
     const snapshot = snapshotRef.current;
@@ -512,6 +525,7 @@ export function PlayerProvider({ children }) {
         autoplay: false,
         sessionId: saved.playbackSessionId,
         playRecorded: saved.playRecorded,
+        context: saved.playbackContext,
       });
     } catch {
       localStorage.removeItem(PLAYER_SESSION_KEY);
@@ -543,6 +557,7 @@ export function PlayerProvider({ children }) {
         volume,
         shuffle,
         repeatMode,
+        playbackContext,
         play,
         pause,
         resume,
@@ -553,6 +568,7 @@ export function PlayerProvider({ children }) {
         playPrev,
         toggleShuffle,
         cycleRepeat,
+        updatePlaybackContext,
         resetPlayer,
       }}
     >

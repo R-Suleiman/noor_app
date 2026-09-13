@@ -6,6 +6,7 @@ import { axiosClient, mediaUrl, trackBg } from "../lib/api";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import VerifiedBadge from "../components/VerifiedBadge";
+import MarqueeText from "../components/MarqueeText";
 
 function TrackSkeletons() {
   return Array.from({ length: 5 }, (_, index) => (
@@ -279,9 +280,7 @@ export default function HomePage() {
 
               {/* Track Primary Metadata */}
               <div className="mb-4">
-                <h3 className="text-lg font-bold text-zinc-100 truncate tracking-tight">
-                  {current.title}
-                </h3>
+                <MarqueeText text={current.title} className="text-lg font-bold text-zinc-100 tracking-tight" />
                 <p className="text-sm text-zinc-400 truncate mt-0.5 font-medium">
                   {current.artist?.name ?? "Unknown Speaker"}
                 </p>
