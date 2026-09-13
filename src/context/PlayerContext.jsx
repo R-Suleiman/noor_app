@@ -7,12 +7,21 @@ import {
   useCallback,
 } from "react";
 import { Howl } from "howler";
-import { axiosClient, API } from "../lib/api";
-import { useAuth } from "./AuthContext"; // 1. Import useAuth
+import { axiosClient, API, mediaUrl } from "../lib/api";
+import { useAuth } from "./AuthContext";
 
 const PlayerCtx = createContext(null);
 export const usePlayer = () => useContext(PlayerCtx);
 const PLAYER_SESSION_KEY = "noor_player_session";
+
+const initialVolume = () => {
+  try {
+    const saved = Number(localStorage.getItem("noor_volume") ?? 0.75);
+    return Number.isFinite(saved) ? Math.max(0, Math.min(1, saved)) : 0.75;
+  } catch {
+    return 0.75;
+  }
+};
 
 const formatTime = (secs) => {
   if (isNaN(secs) || secs === null) return "0:00";
@@ -25,7 +34,8 @@ const formatTime = (secs) => {
 export function PlayerProvider({ children }) {
   const { user, loading: authLoading } = useAuth();
   const howlRef = useRef(null);
-  const seekRafRef = useRef(null);
+  const seekTimerRef = useRef(null);
+  const advanceTimerRef = useRef(null);
   const currentTrackRef = useRef(null);
   const playbackSessionRef = useRef(null);
   const playRecordedRef = useRef(false);
@@ -40,7 +50,8 @@ export function PlayerProvider({ children }) {
   const [progress, setProgress] = useState(0);
   const [elapsed, setElapsed] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [volume, setVolState] = useState(() => Number(localStorage.getItem("noor_volume") ?? 0.75));
+  const [playbackError, setPlaybackError] = useState("");
+  const [volume, setVolState] = useState(initialVolume);
   const [shuffle, setShuffle] = useState(false);
   const [repeatMode, setRepeatMode] = useState("off");
 
@@ -78,18 +89,23 @@ export function PlayerProvider({ children }) {
           playRecordedRef.current = false;
         });
       }
-      seekRafRef.current = requestAnimationFrame(tick);
     };
-    cancelAnimationFrame(seekRafRef.current);
-    seekRafRef.current = requestAnimationFrame(tick);
+    window.clearInterval(seekTimerRef.current);
+    tick();
+    // Four updates per second feel smooth while avoiding a permanent 60fps
+    // animation loop that wastes battery on mobile devices.
+    seekTimerRef.current = window.setInterval(tick, 250);
   }, []);
 
   const stopSeekLoop = useCallback(() => {
-    cancelAnimationFrame(seekRafRef.current);
+    window.clearInterval(seekTimerRef.current);
+    seekTimerRef.current = null;
   }, []);
 
   const destroyCurrent = useCallback(() => {
     stopSeekLoop();
+    window.clearTimeout(advanceTimerRef.current);
+    advanceTimerRef.current = null;
     if (howlRef.current) {
       howlRef.current.off();
       howlRef.current.unload();
@@ -107,6 +123,7 @@ export function PlayerProvider({ children }) {
     setProgress(0);
     setElapsed(0);
     setDuration(0);
+    setPlaybackError("");
   }, [destroyCurrent]);
 
   // Clear another user's queue on an actual account switch, but do not treat
@@ -132,10 +149,11 @@ export function PlayerProvider({ children }) {
       const autoplay = options.autoplay !== false;
 
       if (howlRef.current && currentTrackRef.current?.id === track.id) {
-        if (howlRef.current.state() === "loaded" && !howlRef.current.playing()) {
-          howlRef.current.play();
+        if (howlRef.current.state() === "loaded") {
+          if (!howlRef.current.playing()) howlRef.current.play();
+          return;
         }
-        return;
+        if (howlRef.current.state() === "loading") return;
       }
 
       destroyCurrent();
@@ -144,6 +162,7 @@ export function PlayerProvider({ children }) {
       setProgress(0);
       setElapsed(0);
       setDuration(0);
+      setPlaybackError("");
       setQueue(newQueue);
       playbackSessionRef.current = options.sessionId || globalThis.crypto?.randomUUID?.() || `${Date.now()}-${track.id}`;
       playRecordedRef.current = Boolean(options.playRecorded);
@@ -179,7 +198,14 @@ export function PlayerProvider({ children }) {
             err,
           );
           setStatus("error");
-          setTimeout(() => advanceRef.current?.(true), 1200);
+          setPlaybackError(navigator.onLine
+            ? "This track could not be loaded."
+            : "Reconnect to continue streaming this track.");
+          if (navigator.onLine) {
+            advanceTimerRef.current = window.setTimeout(() => {
+              if (howlRef.current === h) advanceRef.current?.(true);
+            }, 1200);
+          }
         },
 
         onplayerror: (_id, err) => {
@@ -189,11 +215,13 @@ export function PlayerProvider({ children }) {
             err,
           );
           setStatus("paused");
+          setPlaybackError("Tap play to continue listening.");
         },
 
         onplay: () => {
           if (howlRef.current !== h) return;
           setStatus("playing");
+          setPlaybackError("");
           startSeekLoop();
         },
         onpause: () => {
@@ -213,7 +241,9 @@ export function PlayerProvider({ children }) {
           if (howlRef.current !== h) return;
           stopSeekLoop();
           setProgress(100);
-          setTimeout(() => advanceRef.current?.(true), 300);
+          advanceTimerRef.current = window.setTimeout(() => {
+            if (howlRef.current === h) advanceRef.current?.(true);
+          }, 300);
         },
 
         onseek: () => {
@@ -256,13 +286,20 @@ export function PlayerProvider({ children }) {
   const setVolume = useCallback((v) => {
     const clamped = Math.max(0, Math.min(1, v));
     setVolState(clamped);
-    localStorage.setItem("noor_volume", String(clamped));
+    try {
+      localStorage.setItem("noor_volume", String(clamped));
+    } catch {
+      // Volume still changes for this session when storage is unavailable.
+    }
     if (howlRef.current) howlRef.current.volume(clamped);
   }, []);
 
   const playNext = useCallback((fromEnd = false) => {
     const activeTrack = currentTrackRef.current;
-    if (!queue.length || !activeTrack) return;
+    if (!queue.length || !activeTrack) {
+      if (fromEnd) setStatus("paused");
+      return;
+    }
     if (fromEnd && repeatRef.current === "one") {
       howlRef.current?.seek(0);
       howlRef.current?.play();
@@ -301,9 +338,97 @@ export function PlayerProvider({ children }) {
     }
     const activeTrack = currentTrackRef.current;
     if (!activeTrack) return;
-    const prev = queue[queue.findIndex((t) => t.id === activeTrack.id) - 1];
+    const currentIndex = queue.findIndex((t) => t.id === activeTrack.id);
+    const prev = queue[currentIndex - 1]
+      || (repeatRef.current === "all" ? queue.at(-1) : null);
     if (prev) play(prev, queue);
   }, [queue, play, seek]);
+
+  // Present Noor as a first-class media app on supported phones and desktops:
+  // metadata and controls appear on the lock screen, notification shade,
+  // headset controls, and compatible connected devices.
+  useEffect(() => {
+    if (!("mediaSession" in navigator)) return undefined;
+    if (!current) {
+      navigator.mediaSession.metadata = null;
+      navigator.mediaSession.playbackState = "none";
+      return undefined;
+    }
+
+    const artworkUrl = mediaUrl(current.album?.coverUrl || current.coverUrl);
+    if ("MediaMetadata" in window) {
+      navigator.mediaSession.metadata = new window.MediaMetadata({
+        title: current.title,
+        artist: current.artist?.name ?? current.artist ?? "Noor",
+        album: current.album?.title ?? "Noor Islamic Audio",
+        ...(artworkUrl && { artwork: [{ src: artworkUrl }] }),
+      });
+    }
+
+    const changePosition = (nextPosition) => {
+      const h = howlRef.current;
+      if (!h || !h.duration()) return;
+      const position = Math.max(0, Math.min(h.duration(), nextPosition));
+      h.seek(position);
+      setElapsed(position);
+      setProgress((position / h.duration()) * 100);
+    };
+    const handlers = {
+      play: resume,
+      pause,
+      previoustrack: playPrev,
+      nexttrack: () => playNext(),
+      seekbackward: (details) => {
+        const currentPosition = Number(howlRef.current?.seek()) || 0;
+        changePosition(currentPosition - (details.seekOffset || 10));
+      },
+      seekforward: (details) => {
+        const currentPosition = Number(howlRef.current?.seek()) || 0;
+        changePosition(currentPosition + (details.seekOffset || 10));
+      },
+      seekto: (details) => {
+        if (Number.isFinite(details.seekTime)) changePosition(details.seekTime);
+      },
+      stop: () => {
+        pause();
+        changePosition(0);
+      },
+    };
+
+    for (const [action, handler] of Object.entries(handlers)) {
+      try {
+        navigator.mediaSession.setActionHandler(action, handler);
+      } catch {
+        // Individual actions differ between browsers; supported controls remain.
+      }
+    }
+
+    return () => {
+      for (const action of Object.keys(handlers)) {
+        try {
+          navigator.mediaSession.setActionHandler(action, null);
+        } catch {
+          // Ignore actions not implemented by this browser.
+        }
+      }
+    };
+  }, [current, pause, playNext, playPrev, resume]);
+
+  const elapsedSecond = Math.floor(elapsed);
+  useEffect(() => {
+    if (!("mediaSession" in navigator) || !current) return;
+    navigator.mediaSession.playbackState = status === "playing" ? "playing" : "paused";
+    if (!duration || !Number.isFinite(duration) || elapsedSecond > duration) return;
+    try {
+      navigator.mediaSession.setPositionState({
+        duration,
+        playbackRate: 1,
+        position: Math.max(0, elapsedSecond),
+      });
+    } catch {
+      // Some engines expose Media Session without position-state support.
+    }
+  }, [current, duration, elapsedSecond, status]);
 
   useEffect(() => {
     if (howlRef.current) howlRef.current.volume(volume);
@@ -413,6 +538,7 @@ export function PlayerProvider({ children }) {
         durationFormatted: formatTime(duration),
         elapsed,
         duration,
+        playbackError,
         progressRaw: progress,
         volume,
         shuffle,

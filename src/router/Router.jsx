@@ -1,24 +1,28 @@
+import { lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import RootLayout from "../layouts/RootLayout";
-
-import HomePage from "../pages/HomePage";
-import BrowsePage from "../pages/BrowsePage";
-import LibraryPage from "../pages/LibraryPage";
-import UploadPage from "../pages/UploadPage";
-import ArtistPage from "../pages/ArtistPage";
-import ProfilePage from "../pages/ProfilePage";
-import AuthPage from "../pages/AuthPage";
 import ProtectedRoute from "../components/ProtectedRoute";
-import SearchPage from "../pages/Searchpage";
-import AlbumPage from "../pages/AlbumPage";
-import PlaylistPage from "../pages/PlaylistPage";
-import AdminPage from "../pages/AdminPage";
-import NowPlayingPage from "../pages/NowPlayingPage";
+import PageLoader from "../components/PageLoader";
 
-const Router = () => [
+const HomePage = lazy(() => import("../pages/HomePage"));
+const BrowsePage = lazy(() => import("../pages/BrowsePage"));
+const LibraryPage = lazy(() => import("../pages/LibraryPage"));
+const UploadPage = lazy(() => import("../pages/UploadPage"));
+const ArtistPage = lazy(() => import("../pages/ArtistPage"));
+const ProfilePage = lazy(() => import("../pages/ProfilePage"));
+const AuthPage = lazy(() => import("../pages/AuthPage"));
+const SearchPage = lazy(() => import("../pages/Searchpage"));
+const AlbumPage = lazy(() => import("../pages/AlbumPage"));
+const PlaylistPage = lazy(() => import("../pages/PlaylistPage"));
+const AdminPage = lazy(() => import("../pages/AdminPage"));
+const NowPlayingPage = lazy(() => import("../pages/NowPlayingPage"));
+const TrackDeepLinkPage = lazy(() => import("../pages/TrackDeepLinkPage"));
+
+const Router = () => (
   <BrowserRouter>
-    <Routes>
-      <Route path="/auth" element={<AuthPage />} />
+    <Suspense fallback={<PageLoader />}>
+      <Routes>
+        <Route path="/auth" element={<AuthPage />} />
 
       <Route element={<RootLayout />}>
         <Route path="/" element={<HomePage />} />
@@ -28,6 +32,7 @@ const Router = () => [
         <Route path="/profile/:userId" element={<ProfilePage />} />
         <Route path="/albums/:albumId" element={<AlbumPage />} />
         <Route path="/now-playing" element={<NowPlayingPage />} />
+        <Route path="/tracks/:trackId" element={<TrackDeepLinkPage />} />
 
         {/* ─── PERSONAL LIBRARY ROUTES ─── */}
         <Route element={<ProtectedRoute />}>
@@ -45,8 +50,9 @@ const Router = () => [
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
-  </BrowserRouter>,
-];
+      </Routes>
+    </Suspense>
+  </BrowserRouter>
+);
 
 export default Router;

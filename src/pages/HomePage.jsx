@@ -42,30 +42,51 @@ export default function HomePage() {
   const [loadingTrending, setLoadingTrending] = useState(true);
   const [loadingNew, setLoadingNew] = useState(true);
   const [loadingArtists, setLoadingArtists] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
   const navigate = useNavigate()
 
   useEffect(() => {
+    const controller = new AbortController();
+    let active = true;
+    setLoadError(false);
+    setLoadingTrending(true);
+    setLoadingNew(true);
+    setLoadingArtists(true);
+    const requestOptions = { signal: controller.signal };
+
     axiosClient
-      .get("/tracks/trending")
+      .get("/tracks/trending", requestOptions)
       .then((res) => {
-        setTrendingTracks(res.tracks || [])
+        if (active) setTrendingTracks(res.tracks || [])
       }
     )
-      .catch(() => {})
-      .finally(() => setLoadingTrending(false));
+      .catch((error) => {
+        if (active && error.code !== "ERR_CANCELED") setLoadError(true);
+      })
+      .finally(() => active && setLoadingTrending(false));
 
     axiosClient
-      .get("/tracks?sort=recent&limit=10")
-      .then((res) => setNewTracks(res.tracks || []))
-      .catch(() => {})
-      .finally(() => setLoadingNew(false));
+      .get("/tracks?sort=recent&limit=10", requestOptions)
+      .then((res) => active && setNewTracks(res.tracks || []))
+      .catch((error) => {
+        if (active && error.code !== "ERR_CANCELED") setLoadError(true);
+      })
+      .finally(() => active && setLoadingNew(false));
 
     axiosClient
-      .get("/artists")
-      .then((res) => setArtists(res.artists || []))
-      .catch(() => {})
-      .finally(() => setLoadingArtists(false));
-  }, []);
+      .get("/artists", requestOptions)
+      .then((res) => active && setArtists(res.artists || []))
+      .catch((error) => {
+        if (active && error.code !== "ERR_CANCELED") setLoadError(true);
+      })
+      .finally(() => active && setLoadingArtists(false));
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [reloadKey]);
 
   const discoveryTracks = newTracks.length ? newTracks : trendingTracks;
 
@@ -124,6 +145,13 @@ export default function HomePage() {
             {bannerButtonLabel}
           </button>
         </div>
+
+        {loadError && (
+          <div className="mb-8 flex items-center justify-between gap-4 rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-100" role="alert">
+            <span className="flex items-center gap-2"><i className="ti ti-wifi-off" />Some content could not be loaded.</span>
+            <button type="button" onClick={() => setReloadKey((value) => value + 1)} className="shrink-0 rounded-lg border-0 bg-amber-200/10 px-3 py-2 text-xs font-bold text-amber-100 hover:bg-amber-200/20">Try again</button>
+          </div>
+        )}
 
         {/* New Tracks Section */}
         <div className="mb-10">

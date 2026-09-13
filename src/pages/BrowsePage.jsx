@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import TrackRow from "../components/TrackRow";
 import { axiosClient } from "../lib/api";
 import { MAQAM_OPTIONS } from "../constants/trackMetadata";
@@ -15,6 +15,7 @@ const SORTS = [
   { label: "Popularity / Plays", value: "trending" },
   { label: "Alphabetical (A-Z)", value: "az" }
 ];
+const PAGE_SIZE = 30;
 
 export default function BrowsePage() {
   const [genre, setGenre] = useState("All");
@@ -24,27 +25,39 @@ export default function BrowsePage() {
   
   const [tracks, setTracks] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [total, setTotal] = useState(0);
+  const [error, setError] = useState("");
 
-  useEffect(() => {
-    let isMounted = true;
-    setLoading(true);
-
-    // Build standard query parameters safely without stripping characters
-    const params = new URLSearchParams();
+  const queryParams = useMemo(() => {
+    const params = new URLSearchParams({ limit: String(PAGE_SIZE) });
     if (genre !== "All") params.append("genre", genre.toUpperCase());
     if (language !== "All") params.append("language", language);
     if (sort !== "recent") params.append("sort", sort);
     if (maqamat.length) params.append("maqamat", maqamat.join(","));
+    return params;
+  }, [genre, language, sort, maqamat]);
 
-    axiosClient.get(`/tracks?${params.toString()}`)
+  useEffect(() => {
+    let isMounted = true;
+    const controller = new AbortController();
+    setLoading(true);
+    setError("");
+
+    axiosClient.get(`/tracks?${queryParams.toString()}`, { signal: controller.signal })
       .then((res) => {
         if (isMounted) {
           setTracks(res.tracks || []);
+          setTotal(res.total ?? res.tracks?.length ?? 0);
         }
       })
       .catch((err) => {
-        console.error("Browse filter execution failed:", err);
-        if (isMounted) setTracks([]);
+        if (err.code !== "ERR_CANCELED") console.error("Browse filter execution failed:", err);
+        if (isMounted && err.code !== "ERR_CANCELED") {
+          setTracks([]);
+          setTotal(0);
+          setError(err.message);
+        }
       })
       .finally(() => {
         if (isMounted) setLoading(false);
@@ -52,8 +65,29 @@ export default function BrowsePage() {
 
     return () => {
       isMounted = false;
+      controller.abort();
     };
-  }, [genre, language, sort, maqamat]);
+  }, [queryParams]);
+
+  const loadMore = async () => {
+    if (loadingMore || tracks.length >= total) return;
+    setLoadingMore(true);
+    setError("");
+    try {
+      const params = new URLSearchParams(queryParams);
+      params.set("offset", String(tracks.length));
+      const response = await axiosClient.get(`/tracks?${params.toString()}`);
+      setTracks((current) => {
+        const known = new Set(current.map((track) => track.id));
+        return [...current, ...(response.tracks || []).filter((track) => !known.has(track.id))];
+      });
+      setTotal(response.total ?? total);
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   const toggleMaqam = (value) => {
     setMaqamat((current) => current.includes(value)
@@ -62,7 +96,7 @@ export default function BrowsePage() {
   };
 
   return (
-    <div className="p-8 max-w-6xl mx-auto min-h-screen">
+    <div className="mx-auto min-h-full max-w-6xl p-4 sm:p-8">
       
       {/* Page Header Section */}
       <div className="mb-8 border-b border-zinc-800/60 pb-6">
@@ -180,6 +214,11 @@ export default function BrowsePage() {
       </div>
 
       {/* Dynamic Results Content Processing Block */}
+      {error && (
+        <div className="mb-5 flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300" role="alert">
+          <i className="ti ti-alert-circle" aria-hidden="true" />{error}
+        </div>
+      )}
       {loading ? (
         <div className="flex flex-col items-center justify-center py-24 gap-3">
           <div className="w-8 h-8 border-3 border-emerald-500/20 border-t-emerald-400 rounded-full animate-spin" />
@@ -188,7 +227,7 @@ export default function BrowsePage() {
       ) : tracks.length > 0 ? (
         <div className="flex flex-col gap-1 animate-[fadeIn_0.2s_ease-out]">
           <div className="flex items-center justify-between px-4 mb-2 text-[10px] uppercase font-bold tracking-wider text-zinc-500">
-            <span>Filtered Track Listing ({tracks.length} found)</span>
+            <span>Filtered Track Listing ({total} found)</span>
             <span>Category Context</span>
           </div>
           {tracks.map((t, i) => (
@@ -199,6 +238,12 @@ export default function BrowsePage() {
               trackList={tracks} // Injects list to support gapless queue progression
             />
           ))}
+          {tracks.length < total && (
+            <button type="button" disabled={loadingMore} onClick={loadMore} className="mx-auto mt-6 inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/10 bg-zinc-900 px-5 py-3 text-sm font-bold text-zinc-200 hover:bg-zinc-800 disabled:opacity-60">
+              {loadingMore && <i className="ti ti-loader-2 animate-spin" aria-hidden="true" />}
+              {loadingMore ? "Loading tracks…" : `Load more (${total - tracks.length} remaining)`}
+            </button>
+          )}
         </div>
       ) : (
         /* Empty Filter Match State Fallback Illustration Block */

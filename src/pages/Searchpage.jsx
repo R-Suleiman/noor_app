@@ -13,14 +13,15 @@ export default function SearchPage() {
   const navigate = useNavigate()
 
   // Trigger search requests using an optimized fetch routine
-  const executeSearch = useCallback((searchStr) => {
+  const executeSearch = useCallback((searchStr, signal) => {
     if (searchStr.trim().length < 2) {
       setResults({ tracks: [], artists: [], albums: [] });
+      setLoading(false);
       return;
     }
 
     setLoading(true);
-    axiosClient.get(`/search?q=${encodeURIComponent(searchStr)}`)
+    axiosClient.get(`/search?q=${encodeURIComponent(searchStr)}`, { signal })
       .then((res) => {
         setResults({
           tracks: res.tracks || [],
@@ -29,26 +30,30 @@ export default function SearchPage() {
         });
       })
       .catch((err) => {
-        console.error("Search query execution failed:", err);
+        if (err.code !== "ERR_CANCELED") console.error("Search query execution failed:", err);
       })
       .finally(() => {
-        setLoading(false);
+        if (!signal.aborted) setLoading(false);
       });
   }, []);
 
   // Debounce user keystrokes to prevent API spamming
   useEffect(() => {
+    const controller = new AbortController();
     const delayTimer = setTimeout(() => {
-      executeSearch(query);
+      executeSearch(query, controller.signal);
     }, 350);
 
-    return () => clearTimeout(delayTimer);
+    return () => {
+      clearTimeout(delayTimer);
+      controller.abort();
+    };
   }, [query, executeSearch]);
 
   const hasResults = results.tracks.length > 0 || results.artists.length > 0 || results.albums.length > 0;
 
   return (
-    <div className="p-8 max-w-6xl mx-auto min-h-screen">
+    <div className="mx-auto min-h-full max-w-6xl p-4 sm:p-8">
       
       {/* Immersive Input Field Section */}
       <div className="mb-8 relative">
@@ -175,7 +180,7 @@ export default function SearchPage() {
                   >
                     <div className="w-12 h-12 bg-zinc-800 rounded-lg flex-shrink-0 flex items-center justify-center overflow-hidden shadow border border-white/5">
                       {album.coverUrl ? (
-                        <img src={mediaUrl(album.coverUrl)} alt={album.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                        <img src={mediaUrl(album.coverUrl)} alt={album.title} loading="lazy" decoding="async" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                       ) : (
                         <i className="ti ti-album text-zinc-600 text-lg" />
                       )}

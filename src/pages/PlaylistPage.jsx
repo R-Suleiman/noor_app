@@ -84,13 +84,13 @@ export default function PlaylistPage() {
 
   return (
     <div className="p-4 sm:p-8 max-w-5xl mx-auto">
-      <div className="flex items-end gap-5 mb-8">
-        <div className="w-36 h-36 rounded-xl bg-zinc-800 flex items-center justify-center"><i className="ti ti-playlist text-5xl text-zinc-600" /></div>
-        <div>
+      <div className="mb-8 flex flex-col items-start gap-5 sm:flex-row sm:items-end">
+        <div className="flex h-28 w-28 shrink-0 items-center justify-center rounded-xl bg-zinc-800 sm:h-36 sm:w-36"><i className="ti ti-playlist text-5xl text-zinc-600" /></div>
+        <div className="min-w-0">
           <span className="text-xs uppercase text-zinc-500">Playlist</span>
-          <h1 className="text-4xl font-bold text-white">{playlist.title}</h1>
+          <h1 className="break-words text-3xl font-bold text-white sm:text-4xl">{playlist.title}</h1>
           <p className="text-sm text-zinc-500">By {playlist.user.displayName} · {playlist.tracks.length} tracks</p>
-          <div className="flex gap-2 mt-4">
+          <div className="mt-4 flex flex-wrap gap-2">
             {!!playlist.tracks.length && <button onClick={() => play(playlist.tracks[0], playlist.tracks)} className="bg-emerald-600 text-white rounded-full px-5 py-2 border-0 cursor-pointer">Play</button>}
             {playlist.isOwner && <button onClick={editPlaylist} className="bg-zinc-800 text-zinc-200 rounded-full px-5 py-2 border-0 cursor-pointer">Edit</button>}
             {playlist.isOwner && <button onClick={togglePrivacy} className="bg-zinc-800 text-zinc-200 rounded-full px-5 py-2 border-0 cursor-pointer">{playlist.isPublic ? "Make private" : "Make public"}</button>}

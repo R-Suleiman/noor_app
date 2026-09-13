@@ -18,50 +18,38 @@ export default function AlbumPage() {
   const [error, setError] = useState(null);
   const [album, setAlbum] = useState(null);
   const [isOwner, setIsOwner] = useState(false);
-  const [userLikesMap, setUserLikesMap] = useState({});
   const [saved, setSaved] = useState(false);
 
 
-  const fetchAlbumData = async () => {
+  const fetchAlbumData = async (signal) => {
     try {
       setLoading(true);
       setError(null);
 
-      const res = await axiosClient.get(`/albums/${albumId}`);
+      const res = await axiosClient.get(`/albums/${albumId}`, { signal });
+      if (signal.aborted) return;
       const albumData = res.album 
       setAlbum(albumData);
       setSaved(Boolean(albumData.savedByMe));
 
       // 2. Resolve ownership credentials conditionally
-      if (user && albumData) {
-        if (albumData.artist?.userId === user.id) {
-          setIsOwner(true);
-        } 
-      }
-
-      // 3. Optional: Map down existing library likes if your schema includes a likes relation array
-      if (albumData?.tracks) {
-        const likesMap = {};
-        albumData.tracks.forEach((track) => {
-          if (track.likes && Array.isArray(track.likes)) {
-            likesMap[track.id] = track.likes.some((l) => l.userId === user?.id);
-          } 
-        });
-        setUserLikesMap(likesMap);
-      }
+      setIsOwner(Boolean(user && albumData?.artist?.userId === user.id));
     } catch (err) {
+      if (signal.aborted) return;
       console.error(err);
       setError("Failed to resolve studio album compilation details.");
     } finally {
-      setLoading(false);
+      if (!signal.aborted) setLoading(false);
     }
   };
 
   useEffect(() => {
-    if (albumId) fetchAlbumData();
+    const controller = new AbortController();
+    if (albumId) fetchAlbumData(controller.signal);
+    return () => controller.abort();
     // The request is intentionally restarted for album/viewer changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [albumId, user]);
+  }, [albumId, user?.id]);
 
   // Master action to trigger or toggle chronological playback across the whole container
   const handlePlayAlbumAll = () => {
@@ -232,7 +220,6 @@ export default function AlbumPage() {
                 artist: {...album.artist}
               }}
               index={idx}
-              liked={userLikesMap[track.id]}
               trackList={album.tracks}
             />
           ))}

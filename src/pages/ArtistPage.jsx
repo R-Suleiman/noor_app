@@ -27,13 +27,16 @@ export default function ArtistPage() {
 
   useEffect(() => {
     const targetId = artistId || "me";
+    const controller = new AbortController();
+    let active = true;
     setLoading(true);
 
     Promise.all([
-      axiosClient.get(`/artists/${targetId}`),
-      axiosClient.get(`/artists/${targetId}/tracks`),
+      axiosClient.get(`/artists/${targetId}`, { signal: controller.signal }),
+      axiosClient.get(`/artists/${targetId}/tracks`, { signal: controller.signal }),
     ])
       .then(([artistRes, tracksRes]) => {
+        if (!active) return;
         const fetchedArtist = artistRes.data?.artist || artistRes.artist;
         const fetchedTracks = tracksRes.data?.tracks || tracksRes.tracks || [];
 
@@ -45,13 +48,19 @@ export default function ArtistPage() {
         }
       })
       .catch((err) => {
+        if (!active || err.code === "ERR_CANCELED") return;
         console.error(
           "Failed to compile real artist collections payload maps:",
           err,
         );
       })
-      .finally(() => setLoading(false));
-  }, [artistId, user]);
+      .finally(() => active && setLoading(false));
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [artistId, user?.id]);
 
   const handleFollow = async () => {
     if (!user) return;
@@ -93,7 +102,7 @@ export default function ArtistPage() {
     <div className="max-w-7xl mx-auto px-4 pb-12">
       {/* ─── HERO BANNER COVER BLOCK ──────────────────────────────── */}
       <div
-        className={`relative h-80 ${trackBg(tracks[0])} flex items-end rounded-2xl overflow-hidden shadow-xl border border-white/5`}
+        className={`relative flex min-h-80 items-end overflow-hidden rounded-2xl border border-white/5 shadow-xl ${trackBg(tracks[0])}`}
       >
         {artist.coverUrl && (
           <img
@@ -104,7 +113,7 @@ export default function ArtistPage() {
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/40 to-transparent" />
 
-        <div className="relative z-10 flex flex-col md:flex-row items-start md:items-end gap-6 p-8 w-full">
+        <div className="relative z-10 flex w-full flex-col items-start gap-4 p-5 sm:gap-6 sm:p-8 md:flex-row md:items-end">
           {/* Avatar Frame */}
           <div className="relative flex-shrink-0">
             <Avatar
@@ -127,7 +136,7 @@ export default function ArtistPage() {
               )}
             </div>
 
-            <h1 className="text-4xl font-bold text-white truncate tracking-tight drop-shadow-sm mb-2">
+            <h1 className="mb-2 max-w-full truncate text-3xl font-bold tracking-tight text-white drop-shadow-sm sm:text-4xl">
               {artist.name}
             </h1>
 
@@ -225,6 +234,8 @@ export default function ArtistPage() {
                       <img
                         src={mediaUrl(al.coverUrl)}
                         alt={al.title}
+                        loading="lazy"
+                        decoding="async"
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                       />
                     ) : (

@@ -74,6 +74,15 @@ export default function TrackRow({
   return (
     <div
       onClick={handleRowAction}
+      onKeyDown={(event) => {
+        if ((event.key === "Enter" || event.key === " ") && event.target === event.currentTarget) {
+          event.preventDefault();
+          handleRowAction();
+        }
+      }}
+      role="button"
+      tabIndex={0}
+      aria-label={`${active && playing ? "Pause" : "Play"} ${track.title} by ${track.artist?.name ?? "Unknown Speaker"}`}
       className={`group grid grid-cols-[32px_48px_minmax(0,1fr)_64px] md:grid-cols-[32px_48px_minmax(0,1fr)_120px_80px_64px] items-center gap-2 md:gap-4 px-2 md:px-4 py-2 rounded-xl cursor-pointer transition-colors select-none ${
         active
           ? "bg-emerald-500/10 border border-emerald-500/10"
@@ -110,6 +119,7 @@ export default function TrackRow({
             handleRowAction();
           }}
           className="absolute opacity-0 group-hover:opacity-100 transition-opacity bg-zinc-800 hover:bg-zinc-700 border-0 text-zinc-100 rounded-full w-8 h-8 flex items-center justify-center cursor-pointer shadow-md text-xs p-0"
+          aria-label={`${active && playing ? "Pause" : "Play"} ${track.title}`}
         >
           <i
             className={`ti ${active && playing ? "ti-player-pause" : "ti-player-play"} text-zinc-100`}
@@ -125,12 +135,16 @@ export default function TrackRow({
           <img
             src={mediaUrl(track.album?.coverUrl)}
             alt=""
+            loading="lazy"
+            decoding="async"
             className="w-full h-full object-cover"
           />
         ) : track.coverUrl ? (
           <img
             src={mediaUrl(track.coverUrl)}
             alt=""
+            loading="lazy"
+            decoding="async"
             className="w-full h-full object-cover"
           />
         ) : (
@@ -168,7 +182,7 @@ export default function TrackRow({
 
       {/* Reactive Favorite Activation Toggle Button */}
       <div className="flex items-center justify-end gap-1">
-        <button onClick={handleAddToPlaylist} title="Add to playlist" className="bg-transparent border-0 cursor-pointer p-1 text-base text-zinc-500 hover:text-emerald-400">
+        <button onClick={handleAddToPlaylist} title="Add to playlist" aria-label={`Add ${track.title} to playlist`} className="bg-transparent border-0 cursor-pointer p-1 text-base text-zinc-500 hover:text-emerald-400">
           <i className="ti ti-playlist-add" />
         </button>
         <button

@@ -213,7 +213,7 @@ export default function UploadPage() {
   }
 
   return (
-    <div className="p-8 max-w-4xl mx-auto min-h-screen">
+    <div className="mx-auto min-h-full max-w-4xl p-4 sm:p-8">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-zinc-100 tracking-tight" style={{ fontFamily: "'Cinzel', serif" }}>
           Publish Media Creator

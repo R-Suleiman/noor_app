@@ -15,6 +15,7 @@ export default function PlayerBar() {
     progress,
     elapsed,
     duration,
+    playbackError,
     volume,
     togglePlay,
     seek,
@@ -33,14 +34,15 @@ export default function PlayerBar() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Seek bar: click or drag
+  // Pointer events support mouse, pen, and touch with one interaction path.
   const getPct = (e) => {
     const bar = barRef.current;
     if (!bar) return 0;
     const { left, width } = bar.getBoundingClientRect();
     return Math.max(0, Math.min(100, ((e.clientX - left) / width) * 100));
   };
-  const onBarMouseDown = (e) => {
+  const onBarPointerDown = (e) => {
+    e.preventDefault();
     setDragging(true);
     setDragVal(getPct(e));
   };
@@ -51,11 +53,13 @@ export default function PlayerBar() {
       seek(getPct(e));
       setDragging(false);
     };
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp, { once: true });
+    window.addEventListener("pointercancel", onUp, { once: true });
     return () => {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
     };
   }, [dragging, seek]);
 
@@ -65,7 +69,7 @@ export default function PlayerBar() {
 
   return (
     <div
-      className="relative row-start-3 md:row-start-2 md:col-span-2 bg-zinc-900 border-t border-white/5 flex sm:grid sm:grid-cols-[minmax(160px,280px)_1fr] md:grid-cols-[280px_1fr_200px] items-center px-3 sm:px-6 gap-3 sm:gap-6 h-20"
+      className="relative row-start-2 md:col-span-2 bg-zinc-900 border-t border-white/5 flex sm:grid sm:grid-cols-[minmax(160px,280px)_1fr] md:grid-cols-[280px_1fr_200px] items-center px-3 sm:px-6 gap-3 sm:gap-6 h-20"
     >
       {/* Compact mobile player. The whole metadata area opens Now Playing. */}
       <button
@@ -79,6 +83,7 @@ export default function PlayerBar() {
             <img
               src={mediaUrl(current.album?.coverUrl || current.coverUrl)}
               alt=""
+              decoding="async"
               className="w-full h-full object-cover"
             />
           ) : (
@@ -89,10 +94,14 @@ export default function PlayerBar() {
           <span className="block text-sm font-semibold text-zinc-100 truncate">
             {current.title}
           </span>
-          <span className="mt-0.5 flex min-w-0 items-center gap-1 text-xs text-zinc-400">
-            <span className="truncate">{current.artist?.name ?? current.artist ?? "Unknown artist"}</span>
-            {current.artist?.isVerified && <VerifiedBadge showLabel={false} className="shrink-0" />}
-          </span>
+          {playbackError ? (
+            <span className="mt-0.5 block truncate text-xs text-amber-400">{playbackError}</span>
+          ) : (
+            <span className="mt-0.5 flex min-w-0 items-center gap-1 text-xs text-zinc-400">
+              <span className="truncate">{current.artist?.name ?? current.artist ?? "Unknown artist"}</span>
+              {current.artist?.isVerified && <VerifiedBadge showLabel={false} className="shrink-0" />}
+            </span>
+          )}
         </span>
         <i className="ti ti-chevron-up text-zinc-500 text-lg" aria-hidden="true" />
       </button>
@@ -121,12 +130,14 @@ export default function PlayerBar() {
             <img
               src={mediaUrl(current.album?.coverUrl)}
               alt=""
+              decoding="async"
               className="w-full h-full object-cover"
             />
           ) : current.coverUrl ? (
             <img
               src={mediaUrl(current.coverUrl)}
               alt=""
+              decoding="async"
               className="w-full h-full object-cover"
             />
           ) : (
@@ -137,8 +148,8 @@ export default function PlayerBar() {
           <p className="text-sm font-semibold text-zinc-100 truncate">
             {current.title}
           </p>
-          <p className="text-xs text-zinc-400 truncate">
-            {current.artist?.name ?? current.artist}
+          <p className={`truncate text-xs ${playbackError ? "text-amber-400" : "text-zinc-400"}`}>
+            {playbackError || current.artist?.name || current.artist}
           </p>
         </div>
         <button
@@ -197,8 +208,20 @@ export default function PlayerBar() {
           </span>
           <div
             ref={barRef}
-            className="flex-1 h-1 bg-zinc-700 rounded-full cursor-pointer group relative"
-            onMouseDown={onBarMouseDown}
+            className="relative h-3 flex-1 touch-none cursor-pointer rounded-full bg-transparent before:absolute before:inset-x-0 before:top-1/2 before:h-1 before:-translate-y-1/2 before:rounded-full before:bg-zinc-700"
+            onPointerDown={onBarPointerDown}
+            role="slider"
+            tabIndex={0}
+            aria-label="Playback position"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            aria-valuenow={Math.round(displayPct)}
+            onKeyDown={(event) => {
+              if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+                event.preventDefault();
+                seek(Math.max(0, Math.min(100, displayPct + (event.key === "ArrowRight" ? 5 : -5))));
+              }
+            }}
           >
             {/* Buffering shimmer */}
             {buffering && (
@@ -208,12 +231,12 @@ export default function PlayerBar() {
             )}
             {/* Progress fill */}
             <div
-              className="h-full rounded-full bg-emerald-500 group-hover:bg-yellow-400 transition-colors pointer-events-none"
+              className="pointer-events-none absolute left-0 top-1/2 h-1 -translate-y-1/2 rounded-full bg-emerald-500 transition-colors group-hover:bg-yellow-400"
               style={{ width: `${displayPct}%` }}
             />
             {/* Drag handle */}
             <div
-              className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-white opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow"
+              className="pointer-events-none absolute top-1/2 h-3 w-3 -translate-y-1/2 rounded-full bg-white opacity-0 shadow transition-opacity group-hover:opacity-100 group-focus:opacity-100"
               style={{ left: `calc(${displayPct}% - 6px)` }}
             />
           </div>

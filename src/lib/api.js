@@ -42,8 +42,9 @@ export const fmtNum = (value) => {
 // ─── Exported Axios Instance ─────────────────────────────────────────────────
 export const axiosClient = axios.create({
   baseURL: API,
+  timeout: 20_000,
   headers: {
-    "Content-Type": "application/json",
+    Accept: "application/json",
   },
 });
 
@@ -67,8 +68,10 @@ axiosClient.interceptors.response.use(
     return response.data;
   },
   (error) => {
+    if (axios.isCancel(error)) return Promise.reject(error);
     const status = error.response ? error.response.status : null;
-    const errorMessage = error.response?.data?.error ?? "Request execution failed";
+    const errorMessage = error.response?.data?.error
+      ?? (error.code === "ECONNABORTED" ? "The request took too long. Please try again." : "Could not reach Noor. Check your connection and try again.");
 
     if (status === 401) {
       console.warn("Session expired or token invalid.");
@@ -81,6 +84,10 @@ axiosClient.interceptors.response.use(
       }
     }
 
-    return Promise.reject(new Error(errorMessage));
+    const normalized = new Error(errorMessage, { cause: error });
+    normalized.status = status;
+    normalized.code = error.code;
+    normalized.details = error.response?.data;
+    return Promise.reject(normalized);
   }
 );

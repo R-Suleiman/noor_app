@@ -37,7 +37,10 @@ export default function PwaInstallPrompt() {
     window.addEventListener("beforeinstallprompt", onBeforeInstall);
     window.addEventListener("appinstalled", onInstalled);
 
-    if (!recentlyDismissed) {
+    // iOS does not expose beforeinstallprompt, so only that platform needs
+    // timed manual instructions. Other browsers open this dialog only after
+    // confirming that Noor is actually installable.
+    if (!recentlyDismissed && ios) {
       timer = window.setTimeout(() => setVisible(true), 1500);
     }
 
@@ -46,7 +49,7 @@ export default function PwaInstallPrompt() {
       window.removeEventListener("beforeinstallprompt", onBeforeInstall);
       window.removeEventListener("appinstalled", onInstalled);
     };
-  }, [installed]);
+  }, [installed, ios]);
 
   const dismiss = () => {
     window.localStorage.setItem(DISMISSED_AT_KEY, String(Date.now()));

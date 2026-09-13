@@ -134,7 +134,7 @@ export default function LibraryPage() {
             <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {data.map((album) => (
                 <button key={album.id} onClick={() => navigate(`/albums/${album.id}`)} className="text-left bg-zinc-900 border border-white/5 rounded-xl p-4 cursor-pointer text-zinc-100">
-                  <div className="aspect-square rounded-lg bg-zinc-800 overflow-hidden mb-3">{album.coverUrl ? <img src={mediaUrl(album.coverUrl)} alt="" className="w-full h-full object-cover" /> : <i className="ti ti-album text-4xl text-zinc-600 flex h-full items-center justify-center" />}</div>
+                  <div className="aspect-square rounded-lg bg-zinc-800 overflow-hidden mb-3">{album.coverUrl ? <img src={mediaUrl(album.coverUrl)} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" /> : <i className="ti ti-album text-4xl text-zinc-600 flex h-full items-center justify-center" />}</div>
                   <strong className="block truncate">{album.title}</strong>
                   <span className="text-xs text-zinc-500">{album.artist?.name} · {album._count?.tracks ?? 0} tracks</span>
                 </button>

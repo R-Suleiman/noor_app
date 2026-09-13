@@ -7,10 +7,12 @@ import { useTrackLike } from "../hooks/useTrackLike";
 import { fmtDur, fmtNum, mediaUrl, trackBg } from "../lib/api";
 import VerifiedBadge from "../components/VerifiedBadge";
 import { maqamLabel } from "../constants/trackMetadata";
+import { useDialog } from "../context/DialogContext";
 
 export default function NowPlayingPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { alert: showAlert } = useDialog();
   const closeNowPlaying = () => navigate(location.state?.from || "/");
   const {
     current,
@@ -19,6 +21,7 @@ export default function NowPlayingPage() {
     progress,
     elapsed,
     duration,
+    playbackError,
     togglePlay,
     seek,
     playNext,
@@ -49,6 +52,20 @@ export default function NowPlayingPage() {
   const artist = typeof current.artist === "object" ? current.artist : null;
   const artistName = artist?.name || current.artist || "Unknown artist";
   const artistId = artist?.id || current.artistId;
+  const shareTrack = async () => {
+    const url = `${window.location.origin}/tracks/${current.id}`;
+    const shareData = { title: `${current.title} — Noor`, text: `Listen to ${current.title} by ${artistName} on Noor.`, url };
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+      } else {
+        await navigator.clipboard.writeText(url);
+        await showAlert("The track link was copied to your clipboard.", { title: "Ready to share" });
+      }
+    } catch (error) {
+      if (error.name !== "AbortError") await showAlert("The track link could not be shared on this device.", { title: "Sharing unavailable" });
+    }
+  };
 
   return (
     <div className="min-h-full bg-gradient-to-b from-emerald-950/40 via-zinc-950 to-zinc-950 px-5 py-5 sm:px-8 sm:py-8">
@@ -61,9 +78,14 @@ export default function NowPlayingPage() {
             <p className="text-[10px] uppercase tracking-[0.24em] text-emerald-400 font-bold">Now Playing</p>
             <p className="text-xs text-zinc-500 mt-0.5 truncate max-w-48">{current.album?.title || "Noor Audio"}</p>
           </div>
-          <button onClick={toggleLike} aria-label={liked ? "Unlike track" : "Like track"} className={`w-10 h-10 rounded-full bg-zinc-900/80 border border-white/5 cursor-pointer inline-flex items-center justify-center ${liked ? "text-rose-400" : "text-zinc-400"}`}>
-            <HeartIcon filled={liked} className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={shareTrack} aria-label="Share track" className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/5 bg-zinc-900/80 text-zinc-400">
+              <i className="ti ti-share-3 text-lg" aria-hidden="true" />
+            </button>
+            <button onClick={toggleLike} aria-label={liked ? "Unlike track" : "Like track"} className={`w-10 h-10 rounded-full bg-zinc-900/80 border border-white/5 cursor-pointer inline-flex items-center justify-center ${liked ? "text-rose-400" : "text-zinc-400"}`}>
+              <HeartIcon filled={liked} className="w-5 h-5" />
+            </button>
+          </div>
         </header>
 
         <div className={`aspect-square w-full rounded-3xl overflow-hidden shadow-2xl shadow-black/40 flex items-center justify-center ${trackBg(current)}`}>
@@ -111,6 +133,11 @@ export default function NowPlayingPage() {
         )}
 
         <section className="mt-6">
+          {playbackError && (
+            <div className="mb-4 flex items-center gap-2 rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-xs font-semibold text-amber-200" role="alert">
+              <i className="ti ti-alert-circle" aria-hidden="true" />{playbackError}
+            </div>
+          )}
           <input
             type="range"
             min="0"
