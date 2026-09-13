@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { MAQAM_OPTIONS } from "../constants/trackMetadata";
-import { axiosClient, mediaUrl } from "../lib/api";
+import { axiosClient, MEDIA_UPLOAD_TIMEOUT_MS, mediaUrl } from "../lib/api";
 import Spinner from "./Spinner";
 
 const GENRES = ["QASIDAS", "NASHEEDS", "DUFF", "INSTRUMENTAL", "MADRASSA", "OTHER"];
@@ -98,6 +98,7 @@ export default function TrackEditModal({ track, onClose, onSaved }) {
 
       const response = await axiosClient.patch(`/tracks/${track.id}`, payload, {
         headers: { "Content-Type": "multipart/form-data" },
+        timeout: MEDIA_UPLOAD_TIMEOUT_MS,
       });
       onSaved(response.track);
       onClose();

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
-import { axiosClient } from "../lib/api";
+import { axiosClient, MEDIA_UPLOAD_TIMEOUT_MS } from "../lib/api";
 import { useNavigate } from "react-router-dom";
 import { MAQAM_OPTIONS } from "../constants/trackMetadata";
 
@@ -156,13 +156,13 @@ export default function UploadPage() {
 
       const res = await axiosClient.post("/tracks", fd, {
         headers: { "Content-Type": "multipart/form-data" },
+        timeout: MEDIA_UPLOAD_TIMEOUT_MS,
         onUploadProgress: (progressEvent) => {
+          if (!progressEvent.total) return;
           const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-          setProgress(percentCompleted);
-        }
+          setProgress(Math.max(0, Math.min(100, percentCompleted)));
+        },
       });
-
-      console.log('upload response:', res)
 
       if (res.track || res.status === 201 || res.status === 200) {
         setDone(true);
@@ -391,7 +391,7 @@ export default function UploadPage() {
               <div className="flex justify-between text-xs font-bold text-zinc-400 mb-2">
                 <span className="inline-flex items-center gap-2">
                   <div className="w-2.5 h-2.5 border-2 border-emerald-500/20 border-t-emerald-400 rounded-full animate-spin" />
-                  Uploading file...
+                  {progress >= 100 ? "Finalizing track..." : "Uploading file..."}
                 </span>
                 <span className="font-mono text-emerald-400">{progress}%</span>
               </div>

@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import Avatar from "../components/Avatar";
 import TrackRow from "../components/TrackRow";
 import Spinner from "../components/Spinner";
-import { axiosClient, fmtNum, mediaUrl } from "../lib/api";
+import { axiosClient, fmtNum, MEDIA_UPLOAD_TIMEOUT_MS, mediaUrl } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { useNavigate, useParams } from "react-router-dom";
 import { useDialog } from "../context/DialogContext";
@@ -121,6 +121,7 @@ export default function ProfilePage() {
     try {
       const res = await axiosClient.post(`/artists/profile/media`, formData, {
         headers: { "Content-Type": "multipart/form-data" },
+        timeout: MEDIA_UPLOAD_TIMEOUT_MS,
       });
 
       const data = res.data || res;
@@ -203,6 +204,7 @@ export default function ProfilePage() {
         headers: {
           "Content-Type": "multipart/form-data",
         },
+        timeout: MEDIA_UPLOAD_TIMEOUT_MS,
       });
 
       const created = res.album;

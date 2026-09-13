@@ -3,6 +3,10 @@ import axios from "axios";
 const configuredApi = import.meta.env?.VITE_API_BASE_URL || import.meta.env?.API_BASE_URL || "http://localhost:3001";
 export const API_ORIGIN = configuredApi.replace(/\/api\/v1\/?$/, "").replace(/\/$/, "");
 export const API = `${API_ORIGIN}/api/v1`;
+// Binary media transfers can legitimately take several minutes on mobile
+// connections. Keep ordinary API calls fail-fast while giving uploads their
+// own total-request deadline.
+export const MEDIA_UPLOAD_TIMEOUT_MS = 30 * 60_000;
 
 export const mediaUrl = (value) => {
   if (!value) return "";

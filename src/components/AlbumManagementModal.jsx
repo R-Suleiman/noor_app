@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { axiosClient, mediaUrl } from "../lib/api";
+import { axiosClient, MEDIA_UPLOAD_TIMEOUT_MS, mediaUrl } from "../lib/api";
 import Spinner from "./Spinner";
 import { useDialog } from "../context/DialogContext";
 
@@ -88,7 +88,8 @@ export default function AlbumManagementModal({ albumId, onClose, onRefresh }) {
       }
 
       await axiosClient.patch(`/albums/${albumId}`, formData, {
-        headers: { "Content-Type": "multipart/form-data" }
+        headers: { "Content-Type": "multipart/form-data" },
+        timeout: MEDIA_UPLOAD_TIMEOUT_MS,
       });
 
       await fetchAlbumDetails();
